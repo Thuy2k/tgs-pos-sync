@@ -81,6 +81,7 @@ class TGS_POS_Sync {
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
 
         add_action('plugins_loaded', array($this, 'load_textdomain'));
+        add_action('plugins_loaded', array($this, 'check_database_schema'));
 
         // Admin menu
         if (is_admin()) {
@@ -97,6 +98,21 @@ class TGS_POS_Sync {
         }
         if (!wp_next_scheduled('tgs_pos_sync_pull')) {
             wp_schedule_event(time(), 'every_10_minutes', 'tgs_pos_sync_pull');
+        }
+    }
+
+    /**
+     * Check và update database schema nếu cần
+     * Chạy mỗi lần plugin load để đảm bảo schema luôn updated
+     */
+    public function check_database_schema() {
+        $db_version_option = 'tgs_pos_sync_db_version';
+        $current_version = get_option($db_version_option, '0');
+
+        // Nếu version khác với plugin version, chạy migration
+        if (version_compare($current_version, TGS_POS_SYNC_VERSION, '<')) {
+            TGS_POS_Database::create_tables();
+            update_option($db_version_option, TGS_POS_SYNC_VERSION);
         }
     }
 
