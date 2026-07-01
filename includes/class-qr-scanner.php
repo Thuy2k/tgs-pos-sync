@@ -57,12 +57,15 @@ class TGS_POS_QR_Scanner {
             return $result;
         }
 
+        // Debug log
+        error_log('QR Scanner - Result data: ' . print_r($result['data'], true));
+
         // Lưu config
         TGS_POS_Config::save_registration(array(
             'hub_url' => $qr_data['hub_url'],
-            'client_token' => $result['data']['client_token'],
-            'blog_id' => $result['data']['blog_id'],
-            'store_id' => $result['data']['store_id'],
+            'client_token' => $result['data']['client_token'] ?? '',
+            'blog_id' => $result['data']['blog_id'] ?? '',
+            'store_id' => $result['data']['store_id'] ?? '',
         ));
 
         return array(
