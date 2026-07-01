@@ -98,10 +98,13 @@ class TGS_POS_Full_Sync_AJAX {
         // Merge summary
         $batch_summary = array_merge($batch_summary, $local_summary);
 
-        // Check còn data không
-        $has_more = $schema_data['global_data']['summary']['has_more'] ?? false;
+        // Check còn data không - CHỈ check nếu có GLOBAL tables được chọn
+        $has_more = false;
+        if (!empty($selected_global_tables)) {
+            $has_more = $schema_data['global_data']['summary']['has_more'] ?? false;
+        }
 
-        // Update cursors cho batch tiếp theo
+        // Update cursors cho batch tiếp theo (chỉ khi có GLOBAL tables)
         $next_cursors = array(
             'categories' => $schema_data['global_data']['cursor_cat_next'] ?? PHP_INT_MAX,
             'products' => $schema_data['global_data']['cursor_product_next'] ?? PHP_INT_MAX,
