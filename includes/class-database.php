@@ -25,6 +25,8 @@ class TGS_POS_Database {
         $sql_outbox = "CREATE TABLE IF NOT EXISTS {$table_outbox} (
             id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
             event_id varchar(64) NOT NULL,
+            transaction_id varchar(64) DEFAULT NULL COMMENT 'Group events trong cùng 1 transaction',
+            parent_event_id varchar(64) DEFAULT NULL COMMENT 'Parent event (for child events)',
             event_type varchar(50) NOT NULL,
             table_name varchar(100) NOT NULL,
             operation enum('INSERT','UPDATE','DELETE') NOT NULL,
@@ -38,7 +40,9 @@ class TGS_POS_Database {
             PRIMARY KEY (id),
             UNIQUE KEY event_id (event_id),
             KEY status (status),
-            KEY created_at (created_at)
+            KEY created_at (created_at),
+            KEY transaction_id (transaction_id),
+            KEY parent_event_id (parent_event_id)
         ) $charset_collate;";
 
         // 2. Inbox - Hub→Local (đã lấy về)
