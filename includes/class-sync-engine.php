@@ -28,7 +28,7 @@ class TGS_POS_Sync_Engine {
      * Pull from Hub (triggered by cron or manual)
      */
     public static function pull_from_hub() {
-        $result = TGS_POS_Pull_Applier::pull();
+        $result = TGS_POS_Schema_Manager::pull_and_apply();
 
         // Log result
         error_log('[TGS POS Sync] Pull: ' . json_encode($result));

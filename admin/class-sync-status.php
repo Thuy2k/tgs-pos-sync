@@ -22,7 +22,8 @@ class TGS_POS_Sync_Status {
 
         $is_registered = TGS_POS_Config::is_registered();
         $outbox_stats = TGS_POS_Event_Logger::get_stats();
-        $inbox_stats = TGS_POS_Pull_Applier::get_stats();
+        // Inbox không dùng nữa - pull trực tiếp UPSERT
+        $inbox_stats = array('total' => 0, 'pending' => 0, 'applied' => 0, 'errors' => 0);
         $last_push = TGS_POS_Config::get('last_push_at');
         $last_pull = TGS_POS_Config::get('last_pull_at');
 

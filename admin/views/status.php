@@ -185,8 +185,22 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    var data = response.data;
-                    showResult('Pull thành công! Pulled: ' + data.pulled + ', Applied: ' + data.applied + ', Failed: ' + data.failed, 'success');
+                    var data = response.data.data || response.data;
+                    var upserted = data.global_data_upserted || {};
+
+                    var total = 0;
+                    if (upserted.categories) total += (upserted.categories.inserted || 0) + (upserted.categories.updated || 0);
+                    if (upserted.products) total += (upserted.products.inserted || 0) + (upserted.products.updated || 0);
+                    if (upserted.policies) total += (upserted.policies.inserted || 0) + (upserted.policies.updated || 0);
+                    if (upserted.lots) total += (upserted.lots.inserted || 0) + (upserted.lots.updated || 0);
+
+                    var batches = data.batch_count || 0;
+
+                    if (total > 0) {
+                        showResult('Pull thành công! ' + total + ' records trong ' + batches + ' batch(es)', 'success');
+                    } else {
+                        showResult('Pull thành công! Không có thay đổi mới từ Hub.', 'success');
+                    }
                     setTimeout(function() { location.reload(); }, 2000);
                 } else {
                     showResult('Lỗi: ' + (response.data || 'Unknown error'), 'error');
@@ -214,7 +228,18 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     var push = response.data.push;
                     var pull = response.data.pull;
-                    showResult('Full sync thành công!<br>Push: ' + push.pushed + ' events<br>Pull: ' + pull.pulled + ' changes', 'success');
+
+                    var pushCount = push.pushed || 0;
+
+                    var pullData = pull.data || pull;
+                    var upserted = pullData.global_data_upserted || {};
+                    var pullCount = 0;
+                    if (upserted.categories) pullCount += (upserted.categories.inserted || 0) + (upserted.categories.updated || 0);
+                    if (upserted.products) pullCount += (upserted.products.inserted || 0) + (upserted.products.updated || 0);
+                    if (upserted.policies) pullCount += (upserted.policies.inserted || 0) + (upserted.policies.updated || 0);
+                    if (upserted.lots) pullCount += (upserted.lots.inserted || 0) + (upserted.lots.updated || 0);
+
+                    showResult('Full sync thành công!<br>Push: ' + pushCount + ' events<br>Pull: ' + pullCount + ' records', 'success');
                     setTimeout(function() { location.reload(); }, 2000);
                 } else {
                     showResult('Lỗi khi full sync', 'error');
