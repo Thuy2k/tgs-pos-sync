@@ -24,9 +24,6 @@ define('TGS_POS_SYNC_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // Sync tables
 define('TGS_POS_TABLE_OUTBOX', 'tgs_sync_outbox');
-define('TGS_POS_TABLE_INBOX', 'tgs_sync_inbox');
-define('TGS_POS_TABLE_STATE', 'tgs_sync_state');
-define('TGS_POS_TABLE_ID_MAP', 'tgs_id_map');
 
 /**
  * Main plugin class

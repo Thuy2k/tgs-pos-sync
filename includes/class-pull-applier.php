@@ -201,22 +201,16 @@ class TGS_POS_Pull_Applier {
     }
 
     /**
-     * Get inbox stats
+     * Get inbox stats (deprecated - không dùng inbox nữa)
      */
     public static function get_stats() {
-        global $wpdb;
-        $table = $wpdb->prefix . TGS_POS_TABLE_INBOX;
-
-        $stats = $wpdb->get_row(
-            "SELECT
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-                SUM(CASE WHEN status = 'applied' THEN 1 ELSE 0 END) as applied,
-                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errors
-             FROM {$table}",
-            ARRAY_A
+        // Không dùng inbox table nữa
+        // Pull trực tiếp UPSERT vào bảng data
+        return array(
+            'total' => 0,
+            'pending' => 0,
+            'applied' => 0,
+            'errors' => 0,
         );
-
-        return $stats;
     }
 }

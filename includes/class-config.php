@@ -2,6 +2,7 @@
 /**
  * Config Manager
  * Quản lý cấu hình sync (hub_url, client_token, store_id)
+ * Lưu vào wp_options thay vì bảng riêng
  *
  * @package TGS_POS_Sync
  */
@@ -16,44 +17,14 @@ class TGS_POS_Config {
      * Get config value
      */
     public static function get($key, $default = '') {
-        global $wpdb;
-        $table = $wpdb->prefix . TGS_POS_TABLE_STATE;
-
-        $value = $wpdb->get_var($wpdb->prepare(
-            "SELECT state_value FROM {$table} WHERE state_key = %s",
-            $key
-        ));
-
-        return $value !== null ? $value : $default;
+        return get_option('tgs_pos_' . $key, $default);
     }
 
     /**
      * Set config value
      */
     public static function set($key, $value) {
-        global $wpdb;
-        $table = $wpdb->prefix . TGS_POS_TABLE_STATE;
-
-        $exists = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE state_key = %s",
-            $key
-        ));
-
-        if ($exists) {
-            return $wpdb->update(
-                $table,
-                array('state_value' => $value),
-                array('state_key' => $key),
-                array('%s'),
-                array('%s')
-            );
-        } else {
-            return $wpdb->insert(
-                $table,
-                array('state_key' => $key, 'state_value' => $value),
-                array('%s', '%s')
-            );
-        }
+        return update_option('tgs_pos_' . $key, $value);
     }
 
     /**
@@ -78,13 +49,6 @@ class TGS_POS_Config {
     }
 
     /**
-     * Get store ID
-     */
-    public static function get_store_id() {
-        return self::get('store_id');
-    }
-
-    /**
      * Get blog ID
      */
     public static function get_blog_id() {
@@ -92,24 +56,33 @@ class TGS_POS_Config {
     }
 
     /**
-     * Save registration data
+     * Get store ID
+     */
+    public static function get_store_id() {
+        return self::get('store_id');
+    }
+
+    /**
+     * Save registration info
      */
     public static function save_registration($data) {
         self::set('hub_url', $data['hub_url']);
         self::set('client_token', $data['client_token']);
         self::set('blog_id', $data['blog_id']);
         self::set('store_id', $data['store_id']);
+        self::set('store_name', $data['store_name'] ?? '');
         self::set('is_registered', '1');
     }
 
     /**
-     * Clear registration
+     * Clear registration (disconnect)
      */
     public static function clear_registration() {
-        self::set('hub_url', '');
-        self::set('client_token', '');
-        self::set('blog_id', '');
-        self::set('store_id', '');
-        self::set('is_registered', '0');
+        delete_option('tgs_pos_hub_url');
+        delete_option('tgs_pos_client_token');
+        delete_option('tgs_pos_blog_id');
+        delete_option('tgs_pos_store_id');
+        delete_option('tgs_pos_store_name');
+        delete_option('tgs_pos_is_registered');
     }
 }
