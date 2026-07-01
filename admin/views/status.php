@@ -26,17 +26,13 @@ if (!defined('ABSPATH')) {
             <h2><?php _e('Đồng bộ thủ công', 'tgs-pos-sync'); ?></h2>
             <p><?php _e('Sync tự động chạy mỗi 5-10 phút. Bạn có thể trigger thủ công bên dưới.', 'tgs-pos-sync'); ?></p>
             <p>
-                <button type="button" class="button button-primary" id="tgs-push-btn">
-                    <span class="dashicons dashicons-upload" style="vertical-align: middle;"></span>
-                    <?php _e('Push lên Hub', 'tgs-pos-sync'); ?>
+                <button type="button" class="button button-primary" id="tgs-full-sync-btn">
+                    <span class="dashicons dashicons-update" style="vertical-align: middle;"></span>
+                    <?php _e('Kéo về & Đẩy lên (LOCAL)', 'tgs-pos-sync'); ?>
                 </button>
                 <button type="button" class="button button-primary" id="tgs-pull-btn">
                     <span class="dashicons dashicons-download" style="vertical-align: middle;"></span>
-                    <?php _e('Pull từ Hub', 'tgs-pos-sync'); ?>
-                </button>
-                <button type="button" class="button button-secondary" id="tgs-full-sync-btn">
-                    <span class="dashicons dashicons-update" style="vertical-align: middle;"></span>
-                    <?php _e('Push + Pull', 'tgs-pos-sync'); ?>
+                    <?php _e('Pull từ Hub (GLOBAL)', 'tgs-pos-sync'); ?>
                 </button>
             </p>
             <div id="tgs-sync-result"></div>
@@ -156,8 +152,8 @@ if (!defined('ABSPATH')) {
         <div style="background: #f6f7f7; padding: 15px; border-left: 4px solid #646970; margin: 20px 0;">
             <h3 style="margin-top: 0;"><?php _e('Lịch tự động (Cron)', 'tgs-pos-sync'); ?></h3>
             <ul>
-                <li><?php _e('Push lên Hub: Mỗi 5 phút', 'tgs-pos-sync'); ?></li>
-                <li><?php _e('Pull từ Hub: Mỗi 10 phút', 'tgs-pos-sync'); ?></li>
+                <li><?php _e('Kéo về & Đẩy lên LOCAL: Mỗi 5 phút (Pull local tables → Push events)', 'tgs-pos-sync'); ?></li>
+                <li><?php _e('Pull GLOBAL từ Hub: Mỗi 10 phút (Categories, Products, Policies, Lots)', 'tgs-pos-sync'); ?></li>
             </ul>
         </div>
 
@@ -171,34 +167,7 @@ jQuery(document).ready(function($) {
         $('#tgs-sync-result').html('<div class="notice ' + className + ' is-dismissible"><p>' + message + '</p></div>');
     }
 
-    // Push
-    $('#tgs-push-btn').on('click', function() {
-        var $btn = $(this);
-        $btn.prop('disabled', true).html('<span class="dashicons dashicons-update" style="animation: spin 1s linear infinite; vertical-align: middle;"></span> Đang push...');
-
-        $.ajax({
-            url: ajaxurl,
-            method: 'POST',
-            data: {
-                action: 'tgs_pos_manual_push',
-                nonce: '<?php echo wp_create_nonce('tgs_pos_manual_sync'); ?>'
-            },
-            success: function(response) {
-                if (response.success) {
-                    var data = response.data;
-                    showResult('Push thành công! Pushed: ' + data.pushed + ', Applied: ' + data.applied + ', Failed: ' + data.failed, 'success');
-                    setTimeout(function() { location.reload(); }, 2000);
-                } else {
-                    showResult('Lỗi: ' + (response.data || 'Unknown error'), 'error');
-                }
-            },
-            complete: function() {
-                $btn.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="vertical-align: middle;"></span> Push lên Hub');
-            }
-        });
-    });
-
-    // Pull
+    // Pull GLOBAL data
     $('#tgs-pull-btn').on('click', function() {
         var $btn = $(this);
         $btn.prop('disabled', true).html('<span class="dashicons dashicons-update" style="animation: spin 1s linear infinite; vertical-align: middle;"></span> Đang pull...');
@@ -224,9 +193,9 @@ jQuery(document).ready(function($) {
                     var batches = data.batch_count || 0;
 
                     if (total > 0) {
-                        showResult('Pull thành công! ' + total + ' records trong ' + batches + ' batch(es)', 'success');
+                        showResult('Pull GLOBAL thành công! ' + total + ' records trong ' + batches + ' batch(es)', 'success');
                     } else {
-                        showResult('Pull thành công! Không có thay đổi mới từ Hub.', 'success');
+                        showResult('Pull GLOBAL thành công! Không có thay đổi mới từ Hub.', 'success');
                     }
                     setTimeout(function() { location.reload(); }, 2000);
                 } else {
@@ -234,37 +203,47 @@ jQuery(document).ready(function($) {
                 }
             },
             complete: function() {
-                $btn.prop('disabled', false).html('<span class="dashicons dashicons-download" style="vertical-align: middle;"></span> Pull từ Hub');
+                $btn.prop('disabled', false).html('<span class="dashicons dashicons-download" style="vertical-align: middle;"></span> Pull từ Hub (GLOBAL)');
             }
         });
     });
 
-    // Full Sync
+    // Kéo về & Đẩy lên (LOCAL) - Pull local tables + Push
     $('#tgs-full-sync-btn').on('click', function() {
         var $btn = $(this);
-        $btn.prop('disabled', true).html('<span class="dashicons dashicons-update" style="animation: spin 1s linear infinite; vertical-align: middle;"></span> Đang sync...');
+        $btn.prop('disabled', true).html('<span class="dashicons dashicons-update" style="animation: spin 1s linear infinite; vertical-align: middle;"></span> Đang sync LOCAL...');
 
         $.ajax({
             url: ajaxurl,
             method: 'POST',
             data: {
-                action: 'tgs_pos_manual_full_sync',
+                action: 'tgs_pos_manual_push', // Push action already includes pull local
                 nonce: '<?php echo wp_create_nonce('tgs_pos_manual_sync'); ?>'
             },
             success: function(response) {
                 if (response.success) {
-                    var push = response.data.push;
-                    var pull = response.data.pull;
+                    var data = response.data;
+                    var pulled = data.pulled || 0;
+                    var conflicts = data.conflicts_resolved || 0;
+                    var pushed = data.pushed || 0;
+                    var accepted = (data.applied && data.applied.length) || 0;
 
-                    var pushCount = push.pushed || 0;
+                    var msg = 'Sync LOCAL thành công! ';
+                    if (pulled > 0) msg += 'Kéo về: ' + pulled + ' records. ';
+                    if (conflicts > 0) msg += 'Giải quyết: ' + conflicts + ' conflicts. ';
+                    msg += 'Đẩy lên: ' + pushed + ' events, Accepted: ' + accepted + '.';
 
-                    var pullData = pull.data || pull;
-                    var upserted = pullData.global_data_upserted || {};
-                    var pullCount = 0;
-                    if (upserted.categories) pullCount += (upserted.categories.inserted || 0) + (upserted.categories.updated || 0);
-                    if (upserted.products) pullCount += (upserted.products.inserted || 0) + (upserted.products.updated || 0);
-                    if (upserted.policies) pullCount += (upserted.policies.inserted || 0) + (upserted.policies.updated || 0);
-                    if (upserted.lots) pullCount += (upserted.lots.inserted || 0) + (upserted.lots.updated || 0);
+                    showResult(msg, 'success');
+                    setTimeout(function() { location.reload(); }, 2000);
+                } else {
+                    showResult('Lỗi: ' + (response.data || 'Unknown error'), 'error');
+                }
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html('<span class="dashicons dashicons-update" style="vertical-align: middle;"></span> Kéo về & Đẩy lên (LOCAL)');
+            }
+        });
+    });
 
                     showResult('Đồng bộ thành công!<br>Push: ' + pushCount + ' events<br>Pull: ' + pullCount + ' records', 'success');
                     setTimeout(function() { location.reload(); }, 2000);

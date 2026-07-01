@@ -15,6 +15,8 @@ class TGS_POS_Push_Collector {
     /**
      * Collect và push events lên Hub
      * Hỗ trợ transaction atomicity - chỉ push khi có đủ events trong transaction
+     *
+     * IMPORTANT: Pull local tables từ Hub TRƯỚC khi push để tránh conflict
      */
     public static function push() {
         // Check if registered
@@ -22,7 +24,17 @@ class TGS_POS_Push_Collector {
             return array('success' => false, 'message' => 'Not registered with Hub');
         }
 
-        // Get pending events
+        // STEP 1: Pull local tables từ Hub trước (conflict prevention)
+        $pull_result = TGS_POS_Pull_Handler::pull_local_tables();
+
+        if (!$pull_result['success']) {
+            error_log('[TGS POS Sync] Pull failed before push: ' . $pull_result['message']);
+            // Không return error - vẫn cho phép push nếu pull fail
+        } else {
+            error_log('[TGS POS Sync] Pull before push: pulled=' . $pull_result['pulled'] . ', conflicts_resolved=' . $pull_result['conflicts_resolved']);
+        }
+
+        // STEP 2: Get pending events
         $events = TGS_POS_Event_Logger::get_pending_events(50);
 
         if (empty($events)) {
@@ -44,18 +56,33 @@ class TGS_POS_Push_Collector {
             return array('success' => true, 'message' => 'No complete transactions to push', 'pushed' => 0, 'waiting' => count($events));
         }
 
-        // Transform to API format
+        // Transform to API format (match Hub API expectations)
         $api_events = array();
         foreach ($ready_events as $event) {
+            $data = json_decode($event['data'], true);
+
+            // Extract record_id from data (primary key varies by table)
+            $record_id = 0;
+            if (isset($data['local_ledger_id'])) {
+                $record_id = $data['local_ledger_id'];
+            } elseif (isset($data['local_ledger_item_id'])) {
+                $record_id = $data['local_ledger_item_id'];
+            } elseif (isset($data['local_ledger_meta_id'])) {
+                $record_id = $data['local_ledger_meta_id'];
+            } elseif (isset($data['id'])) {
+                $record_id = $data['id'];
+            }
+
             $api_events[] = array(
                 'event_id' => $event['event_id'],
                 'transaction_id' => $event['transaction_id'],
                 'parent_event_id' => $event['parent_event_id'],
-                'event_type' => $event['event_type'],
                 'table_name' => $event['table_name'],
-                'operation' => $event['operation'],
-                'data' => json_decode($event['data'], true),
-                'timestamp' => $event['created_at'],
+                'record_id' => $record_id,
+                'action' => strtolower($event['operation']), // INSERT → insert
+                'occurred_at' => $event['created_at'],
+                'data_hash' => md5(json_encode($data)),
+                'payload' => $data, // Hub API expects 'payload', not 'data'
             );
         }
 
@@ -97,10 +124,12 @@ class TGS_POS_Push_Collector {
         return array(
             'success' => true,
             'message' => 'Pushed successfully',
+            'pulled' => $pull_result['pulled'] ?? 0,
+            'conflicts_resolved' => $pull_result['conflicts_resolved'] ?? 0,
             'pushed' => count($ready_events),
             'waiting' => count($events) - count($ready_events),
-            'applied' => $result['data']['applied'] ?? 0,
-            'failed' => $result['data']['failed'] ?? 0,
+            'applied' => $result['data']['accepted'] ?? array(),
+            'rejected' => $result['data']['rejected'] ?? array(),
         );
     }
 

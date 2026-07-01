@@ -59,8 +59,10 @@ class TGS_POS_HTTP_Client {
     public static function push($events) {
         $hub_url = TGS_POS_Config::get_hub_url();
         $token = TGS_POS_Config::get_client_token();
+        $blog_id = TGS_POS_Config::get('blog_id');
+        $store_id = TGS_POS_Config::get('store_id');
 
-        if (!$hub_url || !$token) {
+        if (!$hub_url || !$token || !$blog_id) {
             return array('success' => false, 'message' => 'Not registered');
         }
 
@@ -71,6 +73,8 @@ class TGS_POS_HTTP_Client {
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'Authorization' => 'Bearer ' . $token,
+                'X-Blog-ID' => $blog_id,
+                'X-Store-ID' => $store_id ?: '',
             ),
             'timeout' => 60,
         ));
@@ -101,8 +105,10 @@ class TGS_POS_HTTP_Client {
     public static function pull($since_version = 0) {
         $hub_url = TGS_POS_Config::get_hub_url();
         $token = TGS_POS_Config::get_client_token();
+        $blog_id = TGS_POS_Config::get('blog_id');
+        $store_id = TGS_POS_Config::get('store_id');
 
-        if (!$hub_url || !$token) {
+        if (!$hub_url || !$token || !$blog_id) {
             return array('success' => false, 'message' => 'Not registered');
         }
 
@@ -112,6 +118,8 @@ class TGS_POS_HTTP_Client {
         $response = wp_remote_get($url, array(
             'headers' => array(
                 'Authorization' => 'Bearer ' . $token,
+                'X-Blog-ID' => $blog_id,
+                'X-Store-ID' => $store_id ?: '',
             ),
             'timeout' => 60,
         ));
@@ -136,8 +144,10 @@ class TGS_POS_HTTP_Client {
     public static function ack($synced_event_ids = array(), $applied_change_ids = array()) {
         $hub_url = TGS_POS_Config::get_hub_url();
         $token = TGS_POS_Config::get_client_token();
+        $blog_id = TGS_POS_Config::get('blog_id');
+        $store_id = TGS_POS_Config::get('store_id');
 
-        if (!$hub_url || !$token) {
+        if (!$hub_url || !$token || !$blog_id) {
             return array('success' => false, 'message' => 'Not registered');
         }
 
@@ -151,6 +161,8 @@ class TGS_POS_HTTP_Client {
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'Authorization' => 'Bearer ' . $token,
+                'X-Blog-ID' => $blog_id,
+                'X-Store-ID' => $store_id ?: '',
             ),
             'timeout' => 30,
         ));
