@@ -66,6 +66,8 @@ class TGS_POS_Sync {
         if (is_admin()) {
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-settings-page.php';
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-sync-status.php';
+            require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-schema-manager-page.php';
+            require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-schema-ajax.php';
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-full-sync-page.php';
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-full-sync-ajax.php';
         }
@@ -177,6 +179,15 @@ class TGS_POS_Sync {
             'manage_options',
             'tgs-pos-sync-status',
             array('TGS_POS_Sync_Status', 'render')
+        );
+
+        add_submenu_page(
+            'tgs-pos-sync',
+            __('Cấu trúc Schema', 'tgs-pos-sync'),
+            __('Cấu trúc Schema', 'tgs-pos-sync'),
+            'manage_options',
+            'tgs-pos-schema',
+            array('TGS_POS_Schema_Manager_Page', 'render')
         );
 
         add_submenu_page(

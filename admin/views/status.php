@@ -45,8 +45,9 @@ if (!defined('ABSPATH')) {
         <!-- Sync Stats -->
         <h2><?php _e('Thống kê Sync', 'tgs-pos-sync'); ?></h2>
 
-        <div style="display: flex; gap: 20px; margin: 20px 0;">
-            <div style="flex: 1; background: #fff; padding: 20px; border-left: 4px solid #2271b1;">
+        <div style="display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap;">
+            <!-- Outbox -->
+            <div style="flex: 1; min-width: 300px; background: #fff; padding: 20px; border-left: 4px solid #2271b1;">
                 <h3 style="margin-top: 0;">
                     <span class="dashicons dashicons-upload"></span>
                     <?php _e('Outbox (Local→Hub)', 'tgs-pos-sync'); ?>
@@ -87,27 +88,28 @@ if (!defined('ABSPATH')) {
                 </p>
             </div>
 
-            <div style="flex: 1; background: #fff; padding: 20px; border-left: 4px solid #00a32a;">
+            <!-- Data GLOBAL từ Hub -->
+            <div style="flex: 1; min-width: 300px; background: #fff; padding: 20px; border-left: 4px solid #00a32a;">
                 <h3 style="margin-top: 0;">
                     <span class="dashicons dashicons-download"></span>
-                    <?php _e('Inbox (Hub→Local)', 'tgs-pos-sync'); ?>
+                    <?php _e('Data từ Hub (GLOBAL)', 'tgs-pos-sync'); ?>
                 </h3>
                 <table class="widefat">
                     <tr>
-                        <th><?php _e('Tổng:', 'tgs-pos-sync'); ?></th>
-                        <td><strong><?php echo number_format($inbox_stats['total']); ?></strong></td>
+                        <th><?php _e('Categories:', 'tgs-pos-sync'); ?></th>
+                        <td><strong><?php echo number_format($pull_stats['categories']); ?></strong></td>
                     </tr>
                     <tr>
-                        <th><?php _e('Chờ apply:', 'tgs-pos-sync'); ?></th>
-                        <td><span style="color: #dba617;"><?php echo number_format($inbox_stats['pending']); ?></span></td>
+                        <th><?php _e('Products:', 'tgs-pos-sync'); ?></th>
+                        <td><strong><?php echo number_format($pull_stats['products']); ?></strong></td>
                     </tr>
                     <tr>
-                        <th><?php _e('Đã apply:', 'tgs-pos-sync'); ?></th>
-                        <td><span style="color: #00a32a;"><?php echo number_format($inbox_stats['applied']); ?></span></td>
+                        <th><?php _e('Policies:', 'tgs-pos-sync'); ?></th>
+                        <td><strong><?php echo number_format($pull_stats['policies']); ?></strong></td>
                     </tr>
                     <tr>
-                        <th><?php _e('Lỗi:', 'tgs-pos-sync'); ?></th>
-                        <td><span style="color: #d63638;"><?php echo number_format($inbox_stats['errors']); ?></span></td>
+                        <th><?php _e('Lots:', 'tgs-pos-sync'); ?></th>
+                        <td><strong><?php echo number_format($pull_stats['lots']); ?></strong></td>
                     </tr>
                 </table>
                 <p style="margin-top: 15px; color: #646970; font-size: 13px;">
@@ -121,6 +123,31 @@ if (!defined('ABSPATH')) {
                         }
                         ?>
                     </strong>
+                </p>
+            </div>
+
+            <!-- Data LOCAL của Shop -->
+            <div style="flex: 1; min-width: 300px; background: #fff; padding: 20px; border-left: 4px solid #d63638;">
+                <h3 style="margin-top: 0;">
+                    <span class="dashicons dashicons-store"></span>
+                    <?php _e('Data Shop', 'tgs-pos-sync'); ?>
+                </h3>
+                <table class="widefat">
+                    <tr>
+                        <th><?php _e('Khách hàng:', 'tgs-pos-sync'); ?></th>
+                        <td><strong><?php echo number_format($local_stats['customers']); ?></strong></td>
+                    </tr>
+                    <tr>
+                        <th><?php _e('Đơn hàng:', 'tgs-pos-sync'); ?></th>
+                        <td><strong><?php echo number_format($local_stats['orders']); ?></strong></td>
+                    </tr>
+                    <tr>
+                        <th><?php _e('Chi tiết items:', 'tgs-pos-sync'); ?></th>
+                        <td><strong><?php echo number_format($local_stats['order_items']); ?></strong></td>
+                    </tr>
+                </table>
+                <p style="margin-top: 15px; color: #646970; font-size: 13px;">
+                    <em><?php _e('Kể cả offline và chính thức online', 'tgs-pos-sync'); ?></em>
                 </p>
             </div>
         </div>
