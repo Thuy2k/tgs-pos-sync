@@ -31,8 +31,8 @@ class TGS_POS_Push_Collector {
         foreach ($events as $event) {
             $data = json_decode($event['data'], true);
 
-            // Extract ledger_id from full payload
-            $ledger_id = $data['ledger']['local_ledger_id'] ?? 0;
+            // Extract sale_ledger_id from full payload (new structure)
+            $ledger_id = $data['sale_ledger']['local_ledger_id'] ?? 0;
 
             $api_events[] = array(
                 'event_id' => $event['event_id'],
@@ -75,7 +75,7 @@ class TGS_POS_Push_Collector {
             foreach ($events as $event) {
                 if (in_array($event['event_id'], $accepted)) {
                     $data = json_decode($event['data'], true);
-                    $ledger_id = $data['ledger']['local_ledger_id'] ?? 0;
+                    $ledger_id = $data['sale_ledger']['local_ledger_id'] ?? 0;
 
                     if ($ledger_id) {
                         self::delete_local_order($ledger_id);
@@ -103,30 +103,47 @@ class TGS_POS_Push_Collector {
     }
 
     /**
-     * Delete local order data (ledger + items + meta)
+     * Delete local order data (all 3 ledgers: SALE + EXPORT + RECEIPT + items + meta)
      */
-    private static function delete_local_order($ledger_id) {
+    private static function delete_local_order($sale_ledger_id) {
         global $wpdb;
 
-        // Delete items
-        $wpdb->delete(
-            $wpdb->prefix . 'local_ledger_item',
-            array('local_ledger_id' => $ledger_id),
-            array('%d')
-        );
+        $ledger_table = $wpdb->prefix . 'local_ledger';
+        $item_table = $wpdb->prefix . 'local_ledger_item';
+        $meta_table = $wpdb->prefix . 'local_ledger_meta';
 
-        // Delete meta
-        $wpdb->delete(
-            $wpdb->prefix . 'local_ledger_meta',
-            array('local_ledger_id' => $ledger_id),
-            array('%d')
-        );
+        // 1. Find all related ledgers (EXPORT and RECEIPT) that are children of SALE
+        $child_ledgers = $wpdb->get_results($wpdb->prepare(
+            "SELECT local_ledger_id, local_ledger_meta_id FROM {$ledger_table}
+             WHERE local_ledger_parent_id = %d",
+            $sale_ledger_id
+        ), ARRAY_A);
 
-        // Delete ledger
-        $wpdb->delete(
-            $wpdb->prefix . 'local_ledger',
-            array('local_ledger_id' => $ledger_id),
-            array('%d')
-        );
+        // 2. Delete items from EXPORT ledgers
+        foreach ($child_ledgers as $child) {
+            $wpdb->delete($item_table, array('local_ledger_id' => $child['local_ledger_id']), array('%d'));
+
+            // Delete child ledger meta
+            if (!empty($child['local_ledger_meta_id'])) {
+                $wpdb->delete($meta_table, array('local_ledger_meta_id' => $child['local_ledger_meta_id']), array('%d'));
+            }
+        }
+
+        // 3. Delete child ledgers (EXPORT + RECEIPT)
+        $wpdb->delete($ledger_table, array('local_ledger_parent_id' => $sale_ledger_id), array('%d'));
+
+        // 4. Get SALE meta_id before deleting
+        $sale_meta_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT local_ledger_meta_id FROM {$ledger_table} WHERE local_ledger_id = %d",
+            $sale_ledger_id
+        ));
+
+        // 5. Delete SALE ledger meta
+        if ($sale_meta_id) {
+            $wpdb->delete($meta_table, array('local_ledger_meta_id' => $sale_meta_id), array('%d'));
+        }
+
+        // 6. Delete SALE ledger
+        $wpdb->delete($ledger_table, array('local_ledger_id' => $sale_ledger_id), array('%d'));
     }
 }

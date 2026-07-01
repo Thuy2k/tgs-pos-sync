@@ -103,37 +103,28 @@ class TGS_POS_Event_Logger {
     }
 
     /**
-     * Log order with items và meta - Single event with full payload
+     * Log order with full payload (3 ledgers: SALE + EXPORT + RECEIPT)
      *
-     * @param array $ledger_data Dữ liệu bảng ledger
-     * @param array $items Array of items data
-     * @param array $meta Meta data
+     * @param array $payload Full order data với all ledgers
      * @return string|false Event ID
      */
-    public static function log_order_transaction($ledger_data, $items = array(), $meta = array()) {
+    public static function log_order_transaction($payload) {
         global $wpdb;
         $table = $wpdb->prefix . TGS_POS_TABLE_OUTBOX;
 
         $event_id = self::generate_event_id();
-        $ledger_id = $ledger_data['local_ledger_id'] ?? time();
-
-        // Embed full order data in payload
-        $full_payload = array(
-            'ledger' => $ledger_data,
-            'items' => $items,
-            'meta' => $meta,
-        );
+        $sale_ledger_id = $payload['sale_ledger']['local_ledger_id'] ?? time();
 
         $result = $wpdb->insert(
             $table,
             array(
                 'event_id' => $event_id,
-                'transaction_id' => 'txn_order_' . $ledger_id,
+                'transaction_id' => 'txn_order_' . $sale_ledger_id,
                 'parent_event_id' => null,
                 'event_type' => 'order_created',
                 'table_name' => 'wp_local_ledger',
                 'operation' => 'INSERT',
-                'data' => json_encode($full_payload, JSON_UNESCAPED_UNICODE),
+                'data' => json_encode($payload, JSON_UNESCAPED_UNICODE),
                 'status' => 'pending',
             ),
             array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')

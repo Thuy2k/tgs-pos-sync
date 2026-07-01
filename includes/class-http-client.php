@@ -84,11 +84,16 @@ class TGS_POS_HTTP_Client {
             return array('success' => false, 'message' => $response->get_error_message());
         }
 
-        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $raw_body = wp_remote_retrieve_body($response);
         $code = wp_remote_retrieve_response_code($response);
 
+        // Remove BOM if present
+        $raw_body = preg_replace('/^\xEF\xBB\xBF/', '', $raw_body);
+
+        $body = json_decode($raw_body, true);
+
         error_log('[TGS POS Sync] Push response code: ' . $code);
-        error_log('[TGS POS Sync] Push response body: ' . wp_remote_retrieve_body($response));
+        error_log('[TGS POS Sync] Push response body: ' . $raw_body);
 
         if ($code !== 200) {
             $message = $body['message'] ?? 'Push failed';
