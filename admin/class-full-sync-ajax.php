@@ -241,8 +241,12 @@ class TGS_POS_Full_Sync_AJAX {
      */
     private static function get_primary_key_from_record($record) {
         $common_pks = array(
-            'local_ledger_id', 'local_ledger_item_id', 'local_ledger_person_id',
-            'local_person_loyalty_log_id', 'id'
+            'local_ledger_id',
+            'local_ledger_item_id',
+            'local_ledger_meta_id',
+            'local_ledger_person_id',
+            'local_person_loyalty_log_id',
+            'id'
         );
 
         foreach ($common_pks as $pk) {
