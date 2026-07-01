@@ -70,6 +70,7 @@ class TGS_POS_Sync {
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-settings-page.php';
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-sync-status.php';
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-full-sync-page.php';
+            require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-full-sync-ajax.php';
         }
     }
 
