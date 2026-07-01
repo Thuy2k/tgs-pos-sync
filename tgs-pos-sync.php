@@ -53,9 +53,12 @@ class TGS_POS_Sync {
     private function includes() {
         // Core classes
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-database.php';
+        require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-database-schema.php';
+        require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-schema-manager.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-config.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-http-client.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-qr-scanner.php';
+        require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-schema-pull-handler.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-sync-engine.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-push-collector.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-pull-applier.php';

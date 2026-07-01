@@ -41,6 +41,27 @@ if (!defined('ABSPATH')) {
             </p>
         </div>
 
+        <!-- Schema Status & Pull Button -->
+        <div class="notice notice-info" style="padding: 20px; margin: 20px 0;">
+            <h2 style="margin-top: 0;">
+                <span class="dashicons dashicons-database"></span>
+                <?php _e('Trạng thái Schema & Dữ liệu', 'tgs-pos-sync'); ?>
+            </h2>
+
+            <div id="tgs-schema-status">
+                <p><?php _e('Đang tải trạng thái...', 'tgs-pos-sync'); ?></p>
+            </div>
+
+            <p>
+                <button type="button" class="button button-primary" id="tgs-pull-schema-btn">
+                    <span class="dashicons dashicons-download" style="margin-top: 3px;"></span>
+                    <?php _e('Kéo schema & dữ liệu từ Hub', 'tgs-pos-sync'); ?>
+                </button>
+            </p>
+
+            <div id="tgs-pull-schema-result"></div>
+        </div>
+
     <?php else: ?>
         <!-- Not Registered -->
         <div class="notice notice-warning" style="padding: 20px; margin: 20px 0;">
@@ -84,6 +105,116 @@ if (!defined('ABSPATH')) {
 
 <script>
 jQuery(document).ready(function($) {
+    // Load schema status on page load
+    if ($('#tgs-schema-status').length) {
+        loadSchemaStatus();
+    }
+
+    // Load schema status
+    function loadSchemaStatus() {
+        $.ajax({
+            url: ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'tgs_pos_schema_status',
+                nonce: '<?php echo wp_create_nonce('tgs_pos_schema_status'); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    var status = response.data;
+                    var html = '<table class="widefat">';
+                    html += '<thead><tr><th>Loại</th><th>Trạng thái</th><th>Chi tiết</th></tr></thead>';
+                    html += '<tbody>';
+
+                    // Local tables
+                    html += '<tr>';
+                    html += '<td><strong>Bảng LOCAL</strong></td>';
+                    html += '<td>' + (status.local.is_complete ?
+                        '<span style="color: green;">✓ Đầy đủ</span>' :
+                        '<span style="color: orange;">○ Chưa đầy đủ</span>') + '</td>';
+                    html += '<td>' + status.local.progress + ' bảng</td>';
+                    html += '</tr>';
+
+                    // Global tables
+                    html += '<tr>';
+                    html += '<td><strong>Bảng GLOBAL</strong></td>';
+                    html += '<td>' + (status.global.is_complete ?
+                        '<span style="color: green;">✓ Đầy đủ</span>' :
+                        '<span style="color: orange;">○ Chưa đầy đủ</span>') + '</td>';
+                    html += '<td>' + status.global.progress + '</td>';
+                    html += '</tr>';
+
+                    html += '</tbody></table>';
+
+                    if (status.is_ready) {
+                        html += '<p style="color: green; font-weight: bold;">✓ Hệ thống đã sẵn sàng bán hàng</p>';
+                    } else {
+                        html += '<p style="color: orange;">Cần kéo schema & dữ liệu từ Hub</p>';
+                    }
+
+                    $('#tgs-schema-status').html(html);
+                } else {
+                    $('#tgs-schema-status').html('<p style="color: red;">Lỗi: ' + response.data + '</p>');
+                }
+            },
+            error: function() {
+                $('#tgs-schema-status').html('<p style="color: red;">Không thể kết nối</p>');
+            }
+        });
+    }
+
+    // Pull schema button
+    $('#tgs-pull-schema-btn').on('click', function() {
+        var $btn = $(this);
+        var $result = $('#tgs-pull-schema-result');
+
+        $btn.prop('disabled', true).text('Đang kéo dữ liệu...');
+        $result.html('');
+
+        $.ajax({
+            url: ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'tgs_pos_pull_schema',
+                nonce: '<?php echo wp_create_nonce('tgs_pos_pull_schema'); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    var data = response.data.data;
+                    var html = '<div class="notice notice-success"><p><strong>Thành công!</strong></p>';
+                    html += '<ul>';
+                    html += '<li>Bảng GLOBAL: ' + data.global_tables_created.length + ' bảng</li>';
+                    html += '<li>Bảng LOCAL: ' + data.local_tables_created.length + ' bảng</li>';
+
+                    if (data.global_tables_failed && data.global_tables_failed.length > 0) {
+                        html += '<li style="color: orange;">GLOBAL failed: ' + data.global_tables_failed.length + ' bảng</li>';
+                    }
+                    if (data.local_tables_failed && data.local_tables_failed.length > 0) {
+                        html += '<li style="color: orange;">LOCAL failed: ' + data.local_tables_failed.length + ' bảng</li>';
+                    }
+
+                    html += '<li>Danh mục: ' + data.global_data_inserted.categories + ' records</li>';
+                    html += '<li>Sản phẩm: ' + data.global_data_inserted.products + ' records</li>';
+                    html += '<li>Chính sách: ' + data.global_data_inserted.policies + ' records</li>';
+                    html += '<li>Lô hàng: ' + data.global_data_inserted.lots + ' records</li>';
+                    html += '</ul></div>';
+                    $result.html(html);
+
+                    // Reload status
+                    loadSchemaStatus();
+                } else {
+                    $result.html('<div class="notice notice-error"><p><strong>Lỗi:</strong> ' + response.data + '</p></div>');
+                }
+            },
+            error: function() {
+                $result.html('<div class="notice notice-error"><p><strong>Lỗi:</strong> Không thể kết nối đến Hub</p></div>');
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html('<span class="dashicons dashicons-download" style="margin-top: 3px;"></span> Kéo schema & dữ liệu từ Hub');
+            }
+        });
+    });
+
     // Register
     $('#tgs-register-form').on('submit', function(e) {
         e.preventDefault();
