@@ -14,10 +14,16 @@ class TGS_POS_Schema_Manager {
 
     /**
      * Pull schema từ Hub và áp dụng
+     * Hỗ trợ incremental sync
      */
     public static function pull_and_apply() {
-        // 1. Pull schema từ Hub (lấy SQL statements)
-        $result = TGS_POS_HTTP_Client::pull_schema();
+        global $wpdb;
+
+        // 1. Lấy timestamp lần pull cuối (incremental sync)
+        $last_pull = get_option('tgs_pos_last_pull_global_data_at', null);
+
+        // 2. Pull schema từ Hub (lấy SQL statements + data thay đổi từ $last_pull)
+        $result = TGS_POS_HTTP_Client::pull_schema($last_pull);
 
         if (!$result['success']) {
             return $result;
@@ -25,14 +31,25 @@ class TGS_POS_Schema_Manager {
 
         $schema_data = $result['data'];
 
-        // 2. Execute SQL statements từ Hub
-        $execute_result = TGS_POS_Database_Schema::execute_sql_statements($schema_data['sql_statements']);
-
-        // 3. Insert dữ liệu GLOBAL
-        $insert_result = self::insert_global_data($schema_data['global_data']);
-        if (!$insert_result['success']) {
-            return $insert_result;
+        // 3. Execute SQL statements từ Hub (chỉ chạy nếu có tables mới)
+        if (!empty($schema_data['sql_statements'])) {
+            $execute_result = TGS_POS_Database_Schema::execute_sql_statements($schema_data['sql_statements']);
+        } else {
+            $execute_result = array(
+                'global' => array('created' => array(), 'failed' => array()),
+                'local' => array('created' => array(), 'failed' => array()),
+            );
         }
+
+        // 4. UPSERT dữ liệu GLOBAL (insert hoặc update)
+        $upsert_result = self::upsert_global_data($schema_data['global_data']);
+        if (!$upsert_result['success']) {
+            return $upsert_result;
+        }
+
+        // 5. Update watermark với server_time từ Hub
+        $server_time = $schema_data['server_time'] ?? current_time('mysql', true);
+        update_option('tgs_pos_last_pull_global_data_at', $server_time);
 
         return array(
             'success' => true,
@@ -42,15 +59,110 @@ class TGS_POS_Schema_Manager {
                 'local_tables_created' => $execute_result['local']['created'],
                 'global_tables_failed' => $execute_result['global']['failed'],
                 'local_tables_failed' => $execute_result['local']['failed'],
-                'global_data_inserted' => $insert_result['summary'],
+                'global_data_upserted' => $upsert_result['summary'],
+                'is_incremental' => !empty($last_pull),
+                'last_pull' => $last_pull,
+                'new_watermark' => $server_time,
             ),
         );
     }
 
     /**
-     * Insert dữ liệu GLOBAL vào local
+     * UPSERT dữ liệu GLOBAL vào local
+     * INSERT nếu chưa có, UPDATE nếu đã có, DELETE nếu bị xóa
      */
-    private static function insert_global_data($global_data) {
+    private static function upsert_global_data($global_data) {
+        global $wpdb;
+
+        $summary = array(
+            'categories' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+            'products' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+            'policies' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+            'lots' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+        );
+
+        // 1. UPSERT categories
+        if (!empty($global_data['categories'])) {
+            foreach ($global_data['categories'] as $cat) {
+                $result = self::upsert_record('wp_global_product_cat', $cat, 'global_product_cat_id');
+                $summary['categories'][$result]++;
+            }
+        }
+
+        // 2. UPSERT products
+        if (!empty($global_data['products'])) {
+            foreach ($global_data['products'] as $product) {
+                $result = self::upsert_record('wp_global_product_name', $product, 'global_product_name_id');
+                $summary['products'][$result]++;
+            }
+        }
+
+        // 3. UPSERT selling policies
+        if (!empty($global_data['selling_policies'])) {
+            foreach ($global_data['selling_policies'] as $policy) {
+                $result = self::upsert_record('wp_global_selling_policy', $policy, 'global_selling_policy_id');
+                $summary['policies'][$result]++;
+            }
+        }
+
+        // 4. UPSERT product lots
+        if (!empty($global_data['product_lots'])) {
+            foreach ($global_data['product_lots'] as $lot) {
+                $result = self::upsert_record('wp_global_product_lots', $lot, 'global_product_lots_id');
+                $summary['lots'][$result]++;
+            }
+        }
+
+        return array(
+            'success' => true,
+            'summary' => $summary,
+        );
+    }
+
+    /**
+     * UPSERT một record vào bảng
+     * @return string 'inserted', 'updated', hoặc 'deleted'
+     */
+    private static function upsert_record($table_name, $data, $pk_column) {
+        global $wpdb;
+
+        // Lọc chỉ giữ các cột tồn tại
+        $clean_data = self::filter_columns($data, $table_name);
+
+        if (empty($clean_data)) {
+            return 'skipped';
+        }
+
+        $pk_value = $data[$pk_column] ?? null;
+        if (!$pk_value) {
+            return 'skipped';
+        }
+
+        // Check nếu bị xóa (deleted_at hoặc is_deleted)
+        $is_deleted = !empty($data['deleted_at']) || (!empty($data['is_deleted']) && $data['is_deleted'] == 1);
+
+        if ($is_deleted) {
+            // DELETE record
+            $wpdb->delete($table_name, array($pk_column => $pk_value));
+            return 'deleted';
+        }
+
+        // Check record đã tồn tại chưa
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table_name} WHERE {$pk_column} = %s",
+            $pk_value
+        ));
+
+        if ($exists) {
+            // UPDATE
+            $wpdb->update($table_name, $clean_data, array($pk_column => $pk_value));
+            return 'updated';
+        } else {
+            // INSERT
+            $wpdb->insert($table_name, $clean_data);
+            return 'inserted';
+        }
+    }
         global $wpdb;
 
         $summary = array(

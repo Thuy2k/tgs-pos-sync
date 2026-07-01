@@ -194,8 +194,9 @@ class TGS_POS_HTTP_Client {
 
     /**
      * Pull schema từ Hub
+     * Hỗ trợ incremental sync với $since timestamp
      */
-    public static function pull_schema() {
+    public static function pull_schema($since = null) {
         $hub_url = TGS_POS_Config::get_hub_url();
         $token = TGS_POS_Config::get_client_token();
         $blog_id = TGS_POS_Config::get_blog_id();
@@ -205,6 +206,11 @@ class TGS_POS_HTTP_Client {
         }
 
         $url = trailingslashit($hub_url) . 'wp-json/tgs-hub/v1/sync/pull-schema';
+
+        // Thêm param 'since' nếu có (incremental sync)
+        if ($since) {
+            $url = add_query_arg('since', $since, $url);
+        }
 
         $response = wp_remote_get($url, array(
             'headers' => array(
