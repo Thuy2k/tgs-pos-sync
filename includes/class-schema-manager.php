@@ -14,40 +14,84 @@ class TGS_POS_Schema_Manager {
 
     /**
      * Pull schema từ Hub và áp dụng
-     * Hỗ trợ incremental sync
+     * Hỗ trợ incremental sync + cursor-based pagination
      */
     public static function pull_and_apply() {
-        global $wpdb;
-
         // 1. Lấy timestamp lần pull cuối (incremental sync)
         $last_pull = get_option('tgs_pos_last_pull_global_data_at', null);
 
-        // 2. Pull schema từ Hub (lấy SQL statements + data thay đổi từ $last_pull)
-        $result = TGS_POS_HTTP_Client::pull_schema($last_pull);
+        // 2. Lấy cursors từ lần pull trước (pagination)
+        $cursors = get_option('tgs_pos_pull_cursors', array(
+            'categories' => PHP_INT_MAX,
+            'products' => PHP_INT_MAX,
+            'policies' => PHP_INT_MAX,
+            'lots' => PHP_INT_MAX,
+        ));
 
-        if (!$result['success']) {
-            return $result;
+        // 3. Pull batches cho đến khi hết data
+        $total_summary = array(
+            'categories' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+            'products' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+            'policies' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+            'lots' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+        );
+
+        $batch_count = 0;
+        $has_more = true;
+        $execute_result = array(
+            'global' => array('created' => array(), 'failed' => array()),
+            'local' => array('created' => array(), 'failed' => array()),
+        );
+
+        while ($has_more) {
+            $batch_count++;
+
+            // Pull một batch từ Hub
+            $result = TGS_POS_HTTP_Client::pull_schema($last_pull, $cursors);
+
+            if (!$result['success']) {
+                return $result;
+            }
+
+            $schema_data = $result['data'];
+
+            // 4. Execute SQL statements từ Hub (chỉ chạy lần đầu nếu có tables mới)
+            if ($batch_count === 1 && !empty($schema_data['sql_statements'])) {
+                $execute_result = TGS_POS_Database_Schema::execute_sql_statements($schema_data['sql_statements']);
+            }
+
+            // 5. UPSERT dữ liệu GLOBAL batch này
+            $upsert_result = self::upsert_global_data($schema_data['global_data']);
+            if (!$upsert_result['success']) {
+                return $upsert_result;
+            }
+
+            // 6. Cộng dồn summary
+            foreach ($total_summary as $key => $counts) {
+                foreach ($counts as $action => $count) {
+                    $total_summary[$key][$action] += $upsert_result['summary'][$key][$action];
+                }
+            }
+
+            // 7. Update cursors cho lần gọi tiếp theo
+            $has_more = $schema_data['global_data']['summary']['has_more'] ?? false;
+
+            if ($has_more) {
+                // Lưu cursors mới
+                $cursors = array(
+                    'categories' => $schema_data['global_data']['cursor_cat_next'] ?? PHP_INT_MAX,
+                    'products' => $schema_data['global_data']['cursor_product_next'] ?? PHP_INT_MAX,
+                    'policies' => $schema_data['global_data']['cursor_policy_next'] ?? PHP_INT_MAX,
+                    'lots' => $schema_data['global_data']['cursor_lot_next'] ?? PHP_INT_MAX,
+                );
+                update_option('tgs_pos_pull_cursors', $cursors);
+            } else {
+                // Hết data rồi - reset cursors về đầu
+                delete_option('tgs_pos_pull_cursors');
+            }
         }
 
-        $schema_data = $result['data'];
-
-        // 3. Execute SQL statements từ Hub (chỉ chạy nếu có tables mới)
-        if (!empty($schema_data['sql_statements'])) {
-            $execute_result = TGS_POS_Database_Schema::execute_sql_statements($schema_data['sql_statements']);
-        } else {
-            $execute_result = array(
-                'global' => array('created' => array(), 'failed' => array()),
-                'local' => array('created' => array(), 'failed' => array()),
-            );
-        }
-
-        // 4. UPSERT dữ liệu GLOBAL (insert hoặc update)
-        $upsert_result = self::upsert_global_data($schema_data['global_data']);
-        if (!$upsert_result['success']) {
-            return $upsert_result;
-        }
-
-        // 5. Update watermark với server_time từ Hub
+        // 8. Update watermark với server_time từ Hub
         $server_time = $schema_data['server_time'] ?? current_time('mysql', true);
         update_option('tgs_pos_last_pull_global_data_at', $server_time);
 
@@ -59,7 +103,8 @@ class TGS_POS_Schema_Manager {
                 'local_tables_created' => $execute_result['local']['created'],
                 'global_tables_failed' => $execute_result['global']['failed'],
                 'local_tables_failed' => $execute_result['local']['failed'],
-                'global_data_upserted' => $upsert_result['summary'],
+                'global_data_upserted' => $total_summary,
+                'batch_count' => $batch_count,
                 'is_incremental' => !empty($last_pull),
                 'last_pull' => $last_pull,
                 'new_watermark' => $server_time,
@@ -162,105 +207,6 @@ class TGS_POS_Schema_Manager {
             $wpdb->insert($table_name, $clean_data);
             return 'inserted';
         }
-    }
-        global $wpdb;
-
-        $summary = array(
-            'categories' => 0,
-            'products' => 0,
-            'policies' => 0,
-            'lots' => 0,
-        );
-
-        // 1. Insert categories - dùng PRIMARY KEY để check duplicate
-        if (!empty($global_data['categories'])) {
-            foreach ($global_data['categories'] as $cat) {
-                // Check bằng primary key (tùy bảng Hub dùng cột gì)
-                $pk_column = isset($cat['global_product_cat_id']) ? 'global_product_cat_id' : 'id';
-                $pk_value = $cat[$pk_column] ?? null;
-
-                if (!$pk_value) continue;
-
-                $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM wp_global_product_cat WHERE {$pk_column} = %d",
-                    $pk_value
-                ));
-
-                if (!$exists) {
-                    $clean_cat = self::filter_columns($cat, 'wp_global_product_cat');
-                    $wpdb->insert('wp_global_product_cat', $clean_cat);
-                    $summary['categories']++;
-                }
-            }
-        }
-
-        // 2. Insert products
-        if (!empty($global_data['products'])) {
-            foreach ($global_data['products'] as $product) {
-                $pk_column = isset($product['global_product_name_id']) ? 'global_product_name_id' : 'sku';
-                $pk_value = $product[$pk_column] ?? null;
-
-                if (!$pk_value) continue;
-
-                $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM wp_global_product_name WHERE {$pk_column} = %s",
-                    $pk_value
-                ));
-
-                if (!$exists) {
-                    $clean_product = self::filter_columns($product, 'wp_global_product_name');
-                    $wpdb->insert('wp_global_product_name', $clean_product);
-                    $summary['products']++;
-                }
-            }
-        }
-
-        // 3. Insert selling policies
-        if (!empty($global_data['selling_policies'])) {
-            foreach ($global_data['selling_policies'] as $policy) {
-                $pk_column = isset($policy['global_selling_policy_id']) ? 'global_selling_policy_id' : 'id';
-                $pk_value = $policy[$pk_column] ?? null;
-
-                if (!$pk_value) continue;
-
-                $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM wp_global_selling_policy WHERE {$pk_column} = %d",
-                    $pk_value
-                ));
-
-                if (!$exists) {
-                    $clean_policy = self::filter_columns($policy, 'wp_global_selling_policy');
-                    $wpdb->insert('wp_global_selling_policy', $clean_policy);
-                    $summary['policies']++;
-                }
-            }
-        }
-
-        // 4. Insert product lots
-        if (!empty($global_data['product_lots'])) {
-            foreach ($global_data['product_lots'] as $lot) {
-                $pk_column = isset($lot['global_product_lots_id']) ? 'global_product_lots_id' : 'lot_code';
-                $pk_value = $lot[$pk_column] ?? null;
-
-                if (!$pk_value) continue;
-
-                $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM wp_global_product_lots WHERE {$pk_column} = %s",
-                    $pk_value
-                ));
-
-                if (!$exists) {
-                    $clean_lot = self::filter_columns($lot, 'wp_global_product_lots');
-                    $wpdb->insert('wp_global_product_lots', $clean_lot);
-                    $summary['lots']++;
-                }
-            }
-        }
-
-        return array(
-            'success' => true,
-            'summary' => $summary,
-        );
     }
 
     /**

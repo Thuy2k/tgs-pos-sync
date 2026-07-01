@@ -194,9 +194,13 @@ class TGS_POS_HTTP_Client {
 
     /**
      * Pull schema từ Hub
-     * Hỗ trợ incremental sync với $since timestamp
+     * Hỗ trợ incremental sync với $since timestamp + cursor-based pagination
+     *
+     * @param string|null $since Timestamp cho incremental sync
+     * @param array $cursors Cursors cho từng bảng: ['categories' => 123, 'products' => 456, ...]
+     * @return array Response with success/data
      */
-    public static function pull_schema($since = null) {
+    public static function pull_schema($since = null, $cursors = array()) {
         $hub_url = TGS_POS_Config::get_hub_url();
         $token = TGS_POS_Config::get_client_token();
         $blog_id = TGS_POS_Config::get_blog_id();
@@ -210,6 +214,20 @@ class TGS_POS_HTTP_Client {
         // Thêm param 'since' nếu có (incremental sync)
         if ($since) {
             $url = add_query_arg('since', $since, $url);
+        }
+
+        // Thêm cursors nếu có (pagination)
+        if (!empty($cursors['categories'])) {
+            $url = add_query_arg('cursor_cat', $cursors['categories'], $url);
+        }
+        if (!empty($cursors['products'])) {
+            $url = add_query_arg('cursor_product', $cursors['products'], $url);
+        }
+        if (!empty($cursors['policies'])) {
+            $url = add_query_arg('cursor_policy', $cursors['policies'], $url);
+        }
+        if (!empty($cursors['lots'])) {
+            $url = add_query_arg('cursor_lot', $cursors['lots'], $url);
         }
 
         $response = wp_remote_get($url, array(
