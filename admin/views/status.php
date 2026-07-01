@@ -244,18 +244,6 @@ jQuery(document).ready(function($) {
             }
         });
     });
-
-                    showResult('Đồng bộ thành công!<br>Push: ' + pushCount + ' events<br>Pull: ' + pullCount + ' records', 'success');
-                    setTimeout(function() { location.reload(); }, 2000);
-                } else {
-                    showResult('Lỗi khi full sync', 'error');
-                }
-            },
-            complete: function() {
-                $btn.prop('disabled', false).html('<span class="dashicons dashicons-update" style="vertical-align: middle;"></span> Full Sync');
-            }
-        });
-    });
 });
 </script>
 
