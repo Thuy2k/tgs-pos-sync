@@ -66,6 +66,12 @@ class TGS_POS_Schema_Manager {
                 return $upsert_result;
             }
 
+            // 5b. UPSERT dữ liệu LOCAL từ multisite blog (nếu có)
+            if (!empty($schema_data['local_data'])) {
+                $local_result = self::upsert_local_data($schema_data['local_data']);
+                // Không fail nếu local_data lỗi, chỉ log
+            }
+
             // 6. Cộng dồn summary
             foreach ($total_summary as $key => $counts) {
                 foreach ($counts as $action => $count) {
@@ -188,6 +194,78 @@ class TGS_POS_Schema_Manager {
             'success' => true,
             'summary' => $summary,
         );
+    }
+
+    /**
+     * UPSERT dữ liệu LOCAL từ multisite blog vào local shop
+     * INSERT nếu chưa có, UPDATE nếu đã có, DELETE nếu bị xóa
+     */
+    private static function upsert_local_data($local_data) {
+        global $wpdb;
+
+        $summary = array(
+            'total_records' => 0,
+            'tables_processed' => 0,
+        );
+
+        // Lặp qua từng bảng LOCAL
+        foreach ($local_data as $table_name => $records) {
+            // Bỏ qua key 'summary'
+            if ($table_name === 'summary' || !is_array($records)) {
+                continue;
+            }
+
+            // Tên bảng local: wp_local_ledger, wp_local_ledger_item, etc.
+            $full_table = $wpdb->prefix . $table_name;
+
+            // Check bảng tồn tại
+            $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $full_table));
+            if (!$exists) {
+                continue;
+            }
+
+            // Detect primary key
+            $pk = self::detect_primary_key($full_table);
+            if (!$pk) {
+                continue;
+            }
+
+            // UPSERT từng record
+            foreach ($records as $record) {
+                self::upsert_record($full_table, $record, $pk);
+                $summary['total_records']++;
+            }
+
+            $summary['tables_processed']++;
+        }
+
+        return array(
+            'success' => true,
+            'summary' => $summary,
+        );
+    }
+
+    /**
+     * Detect primary key của bảng
+     */
+    private static function detect_primary_key($table_name) {
+        global $wpdb;
+
+        // Lấy thông tin keys
+        $keys = $wpdb->get_results("SHOW KEYS FROM {$table_name} WHERE Key_name = 'PRIMARY'", ARRAY_A);
+
+        if (!empty($keys)) {
+            return $keys[0]['Column_name'];
+        }
+
+        // Fallback: tìm cột AUTO_INCREMENT
+        $auto_inc = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} WHERE Extra LIKE '%auto_increment%'", ARRAY_A);
+
+        if (!empty($auto_inc)) {
+            return $auto_inc[0]['Field'];
+        }
+
+        return null;
     }
 
     /**
