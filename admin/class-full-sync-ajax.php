@@ -182,6 +182,7 @@ class TGS_POS_Full_Sync_AJAX {
         }
 
         $total_records = 0;
+        $details = array(); // Debug: track per table
 
         foreach ($selected_tables as $method_name) {
             // Extract tên bảng: sql_local_ledger -> local_ledger
@@ -189,11 +190,13 @@ class TGS_POS_Full_Sync_AJAX {
 
             // Check data có tồn tại không
             if (empty($local_data[$base_table])) {
+                $details[$base_table] = 0;
                 continue;
             }
 
             $table_name = $wpdb->prefix . $base_table;
             $records = $local_data[$base_table];
+            $table_count = 0;
 
             // Upsert từng record
             foreach ($records as $record) {
@@ -220,11 +223,17 @@ class TGS_POS_Full_Sync_AJAX {
                     $wpdb->insert($table_name, $record);
                 }
 
+                $table_count++;
                 $total_records++;
             }
+
+            $details[$base_table] = $table_count;
         }
 
-        return array('local_records' => $total_records);
+        // Log chi tiết
+        error_log('LOCAL upsert details: ' . print_r($details, true));
+
+        return array('local_records' => $total_records, 'local_details' => $details);
     }
 
     /**
