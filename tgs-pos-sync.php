@@ -69,6 +69,7 @@ class TGS_POS_Sync {
         if (is_admin()) {
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-settings-page.php';
             require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-sync-status.php';
+            require_once TGS_POS_SYNC_PLUGIN_DIR . 'admin/class-full-sync-page.php';
         }
     }
 
@@ -178,6 +179,15 @@ class TGS_POS_Sync {
             'manage_options',
             'tgs-pos-sync-status',
             array('TGS_POS_Sync_Status', 'render')
+        );
+
+        add_submenu_page(
+            'tgs-pos-sync',
+            __('Pull Full Sync', 'tgs-pos-sync'),
+            __('Pull Full Sync', 'tgs-pos-sync'),
+            'manage_options',
+            'tgs-pos-full-sync',
+            array('TGS_POS_Full_Sync_Page', 'render')
         );
     }
 }

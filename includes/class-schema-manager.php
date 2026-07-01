@@ -228,4 +228,51 @@ class TGS_POS_Schema_Manager {
 
         return $filtered;
     }
+
+    /**
+     * UPSERT dữ liệu GLOBAL trực tiếp (dùng cho Full Sync)
+     * Không có cursor pagination, chỉ insert/update toàn bộ data một lần
+     */
+    public static function upsert_global_data_direct($global_data) {
+        $summary = array(
+            'categories' => 0,
+            'products' => 0,
+            'policies' => 0,
+            'lots' => 0,
+        );
+
+        // 1. UPSERT categories
+        if (!empty($global_data['categories'])) {
+            foreach ($global_data['categories'] as $cat) {
+                self::upsert_record('wp_global_product_cat', $cat, 'global_product_cat_id');
+                $summary['categories']++;
+            }
+        }
+
+        // 2. UPSERT products
+        if (!empty($global_data['products'])) {
+            foreach ($global_data['products'] as $product) {
+                self::upsert_record('wp_global_product_name', $product, 'global_product_name_id');
+                $summary['products']++;
+            }
+        }
+
+        // 3. UPSERT selling policies
+        if (!empty($global_data['selling_policies'])) {
+            foreach ($global_data['selling_policies'] as $policy) {
+                self::upsert_record('wp_global_selling_policy', $policy, 'global_selling_policy_id');
+                $summary['policies']++;
+            }
+        }
+
+        // 4. UPSERT product lots
+        if (!empty($global_data['product_lots'])) {
+            foreach ($global_data['product_lots'] as $lot) {
+                self::upsert_record('wp_global_product_lots', $lot, 'global_product_lots_id');
+                $summary['lots']++;
+            }
+        }
+
+        return $summary;
+    }
 }
