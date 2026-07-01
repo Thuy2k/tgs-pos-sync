@@ -60,12 +60,18 @@ class TGS_POS_Schema_Manager {
             'lots' => 0,
         );
 
-        // 1. Insert categories
+        // 1. Insert categories - dùng PRIMARY KEY để check duplicate
         if (!empty($global_data['categories'])) {
             foreach ($global_data['categories'] as $cat) {
+                // Check bằng primary key (tùy bảng Hub dùng cột gì)
+                $pk_column = isset($cat['global_product_cat_id']) ? 'global_product_cat_id' : 'id';
+                $pk_value = $cat[$pk_column] ?? null;
+
+                if (!$pk_value) continue;
+
                 $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM wp_global_product_cat WHERE id = %d",
-                    $cat['id']
+                    "SELECT COUNT(*) FROM wp_global_product_cat WHERE {$pk_column} = %d",
+                    $pk_value
                 ));
 
                 if (!$exists) {
@@ -78,9 +84,14 @@ class TGS_POS_Schema_Manager {
         // 2. Insert products
         if (!empty($global_data['products'])) {
             foreach ($global_data['products'] as $product) {
+                $pk_column = isset($product['global_product_name_id']) ? 'global_product_name_id' : 'sku';
+                $pk_value = $product[$pk_column] ?? null;
+
+                if (!$pk_value) continue;
+
                 $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM wp_global_product_name WHERE sku = %s",
-                    $product['sku']
+                    "SELECT COUNT(*) FROM wp_global_product_name WHERE {$pk_column} = %s",
+                    $pk_value
                 ));
 
                 if (!$exists) {
@@ -93,9 +104,14 @@ class TGS_POS_Schema_Manager {
         // 3. Insert selling policies
         if (!empty($global_data['selling_policies'])) {
             foreach ($global_data['selling_policies'] as $policy) {
+                $pk_column = isset($policy['global_selling_policy_id']) ? 'global_selling_policy_id' : 'id';
+                $pk_value = $policy[$pk_column] ?? null;
+
+                if (!$pk_value) continue;
+
                 $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM wp_global_selling_policy WHERE id = %d",
-                    $policy['id']
+                    "SELECT COUNT(*) FROM wp_global_selling_policy WHERE {$pk_column} = %d",
+                    $pk_value
                 ));
 
                 if (!$exists) {
@@ -108,9 +124,14 @@ class TGS_POS_Schema_Manager {
         // 4. Insert product lots
         if (!empty($global_data['product_lots'])) {
             foreach ($global_data['product_lots'] as $lot) {
+                $pk_column = isset($lot['global_product_lots_id']) ? 'global_product_lots_id' : 'lot_code';
+                $pk_value = $lot[$pk_column] ?? null;
+
+                if (!$pk_value) continue;
+
                 $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM wp_global_product_lots WHERE lot_code = %s",
-                    $lot['lot_code']
+                    "SELECT COUNT(*) FROM wp_global_product_lots WHERE {$pk_column} = %s",
+                    $pk_value
                 ));
 
                 if (!$exists) {
