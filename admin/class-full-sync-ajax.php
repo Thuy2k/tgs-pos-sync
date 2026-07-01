@@ -238,20 +238,42 @@ class TGS_POS_Full_Sync_AJAX {
 
     /**
      * Get primary key from record
+     * Auto-detect từ tên bảng thay vì hardcode
      */
     private static function get_primary_key_from_record($record) {
-        $common_pks = array(
-            'local_ledger_id',
-            'local_ledger_item_id',
-            'local_ledger_meta_id',
-            'local_ledger_person_id',
-            'local_person_loyalty_log_id',
-            'id'
+        // Thử các pattern phổ biến theo thứ tự ưu tiên
+        $possible_patterns = array(
+            // Pattern 1: {table_name}_id (phổ biến nhất)
+            // VD: local_ledger_meta -> local_ledger_meta_id
+            function($record) {
+                foreach (array_keys($record) as $key) {
+                    if (preg_match('/^[a-z_]+_id$/', $key)) {
+                        return array($key => $record[$key]);
+                    }
+                }
+                return null;
+            },
+            // Pattern 2: Cột tên 'id'
+            function($record) {
+                if (isset($record['id'])) {
+                    return array('id' => $record['id']);
+                }
+                return null;
+            },
         );
 
-        foreach ($common_pks as $pk) {
-            if (isset($record[$pk])) {
-                return array($pk => $record[$pk]);
+        // Thử từng pattern
+        foreach ($possible_patterns as $pattern) {
+            $result = $pattern($record);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+
+        // Fallback: Lấy cột đầu tiên có chứa 'id'
+        foreach (array_keys($record) as $key) {
+            if (stripos($key, 'id') !== false) {
+                return array($key => $record[$key]);
             }
         }
 
