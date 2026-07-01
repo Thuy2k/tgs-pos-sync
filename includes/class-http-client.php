@@ -32,11 +32,21 @@ class TGS_POS_HTTP_Client {
         $body = json_decode(wp_remote_retrieve_body($response), true);
         $code = wp_remote_retrieve_response_code($response);
 
+        // Debug log
+        error_log('HTTP Client - Response code: ' . $code);
+        error_log('HTTP Client - Response body: ' . wp_remote_retrieve_body($response));
+        error_log('HTTP Client - Decoded body: ' . print_r($body, true));
+
         if ($code !== 200) {
             return array('success' => false, 'message' => $body['message'] ?? 'Unknown error', 'code' => $code, 'body' => $body);
         }
 
-        return array('success' => true, 'data' => $body['data']);
+        // Response structure: {"success": true, "data": {...}}
+        if (!$body || !isset($body['success'], $body['data'])) {
+            return array('success' => false, 'message' => 'Invalid response structure');
+        }
+
+        return array('success' => $body['success'], 'data' => $body['data']);
     }
 
     /**
