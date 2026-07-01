@@ -66,11 +66,7 @@ class TGS_POS_Schema_Manager {
                 return $upsert_result;
             }
 
-            // 5b. UPSERT dữ liệu LOCAL từ multisite blog (nếu có)
-            if (!empty($schema_data['local_data'])) {
-                $local_result = self::upsert_local_data($schema_data['local_data']);
-                // Không fail nếu local_data lỗi, chỉ log
-            }
+            // Note: local_data is NOT pulled here - use "Push & Pull LOCAL" button instead
 
             // 6. Cộng dồn summary
             foreach ($total_summary as $key => $counts) {
