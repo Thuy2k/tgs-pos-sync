@@ -75,7 +75,8 @@ class TGS_POS_Schema_Manager {
                 ));
 
                 if (!$exists) {
-                    $wpdb->insert('wp_global_product_cat', $cat);
+                    $clean_cat = self::filter_columns($cat, 'wp_global_product_cat');
+                    $wpdb->insert('wp_global_product_cat', $clean_cat);
                     $summary['categories']++;
                 }
             }
@@ -95,7 +96,8 @@ class TGS_POS_Schema_Manager {
                 ));
 
                 if (!$exists) {
-                    $wpdb->insert('wp_global_product_name', $product);
+                    $clean_product = self::filter_columns($product, 'wp_global_product_name');
+                    $wpdb->insert('wp_global_product_name', $clean_product);
                     $summary['products']++;
                 }
             }
@@ -115,7 +117,8 @@ class TGS_POS_Schema_Manager {
                 ));
 
                 if (!$exists) {
-                    $wpdb->insert('wp_global_selling_policy', $policy);
+                    $clean_policy = self::filter_columns($policy, 'wp_global_selling_policy');
+                    $wpdb->insert('wp_global_selling_policy', $clean_policy);
                     $summary['policies']++;
                 }
             }
@@ -135,7 +138,8 @@ class TGS_POS_Schema_Manager {
                 ));
 
                 if (!$exists) {
-                    $wpdb->insert('wp_global_product_lots', $lot);
+                    $clean_lot = self::filter_columns($lot, 'wp_global_product_lots');
+                    $wpdb->insert('wp_global_product_lots', $clean_lot);
                     $summary['lots']++;
                 }
             }
@@ -145,5 +149,25 @@ class TGS_POS_Schema_Manager {
             'success' => true,
             'summary' => $summary,
         );
+    }
+
+    /**
+     * Filter data để chỉ giữ các cột tồn tại trong bảng Local
+     */
+    private static function filter_columns($data, $table_name) {
+        global $wpdb;
+
+        // Lấy danh sách cột của bảng
+        $columns = $wpdb->get_col("DESCRIBE {$table_name}", 0);
+
+        // Chỉ giữ các key có trong bảng
+        $filtered = array();
+        foreach ($data as $key => $value) {
+            if (in_array($key, $columns)) {
+                $filtered[$key] = $value;
+            }
+        }
+
+        return $filtered;
     }
 }

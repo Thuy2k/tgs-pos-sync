@@ -52,16 +52,18 @@ class TGS_POS_Database_Schema {
         // Execute LOCAL tables
         if (!empty($sql_statements['local'])) {
             foreach ($sql_statements['local'] as $statement) {
-                $table_name = self::extract_table_name($statement['sql']);
-                try {
-                    dbDelta($statement['sql']);
+                // Replace {{prefix}} bằng wp_ prefix thực tế
+                $sql = str_replace('{{prefix}}', $wpdb->prefix, $statement['sql']);
 
-                    // Verify table created (with wp_ prefix)
-                    $full_name = $wpdb->prefix . str_replace($wpdb->prefix, '', $table_name);
-                    if ($wpdb->get_var("SHOW TABLES LIKE '{$full_name}'") === $full_name) {
-                        $results['local']['created'][] = $full_name;
+                $table_name = self::extract_table_name($sql);
+                try {
+                    dbDelta($sql);
+
+                    // Verify table created
+                    if ($wpdb->get_var("SHOW TABLES LIKE '{$table_name}'") === $table_name) {
+                        $results['local']['created'][] = $table_name;
                     } else {
-                        $results['local']['failed'][] = $full_name;
+                        $results['local']['failed'][] = $table_name;
                     }
                 } catch (Exception $e) {
                     $results['local']['failed'][] = $table_name . ' - ' . $e->getMessage();
