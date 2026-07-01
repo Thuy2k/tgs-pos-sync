@@ -183,7 +183,7 @@ class TGS_POS_Full_Sync_Page {
                 $('#sync-result').hide();
 
                 var batchCount = 0;
-                var totalRecords = {categories: 0, products: 0, policies: 0, lots: 0};
+                var totalRecords = {categories: 0, products: 0, policies: 0, lots: 0, local: 0};
                 var cursors = {categories: 0, products: 0, policies: 0, lots: 0};
 
                 // Step 1: Truncate tables
@@ -223,23 +223,32 @@ class TGS_POS_Full_Sync_Page {
                             action: 'tgs_full_sync_batch',
                             nonce: $('#tgs_full_sync_nonce').val(),
                             cursors: cursors,
-                            batch_count: batchCount
+                            batch_count: batchCount,
+                            selected_global_tables: globalTables,
+                            selected_local_tables: localTables
                         },
                         success: function(response) {
                             if (response.success) {
                                 var data = response.data;
 
                                 // Update totals
-                                totalRecords.categories += data.batch_summary.categories;
-                                totalRecords.products += data.batch_summary.products;
-                                totalRecords.policies += data.batch_summary.policies;
-                                totalRecords.lots += data.batch_summary.lots;
+                                totalRecords.categories += data.batch_summary.categories || 0;
+                                totalRecords.products += data.batch_summary.products || 0;
+                                totalRecords.policies += data.batch_summary.policies || 0;
+                                totalRecords.lots += data.batch_summary.lots || 0;
+                                totalRecords.local += data.batch_summary.local_records || 0;
 
-                                updateStatus('✓ Batch #' + batchCount + ': ' +
-                                    'Cat: ' + data.batch_summary.categories + ', ' +
-                                    'Prod: ' + data.batch_summary.products + ', ' +
-                                    'Policy: ' + data.batch_summary.policies + ', ' +
-                                    'Lot: ' + data.batch_summary.lots + '\n');
+                                var statusMsg = '✓ Batch #' + batchCount + ': ' +
+                                    'Cat: ' + (data.batch_summary.categories || 0) + ', ' +
+                                    'Prod: ' + (data.batch_summary.products || 0) + ', ' +
+                                    'Policy: ' + (data.batch_summary.policies || 0) + ', ' +
+                                    'Lot: ' + (data.batch_summary.lots || 0);
+
+                                if (data.batch_summary.local_records) {
+                                    statusMsg += ', Local: ' + data.batch_summary.local_records;
+                                }
+
+                                updateStatus(statusMsg + '\n');
 
                                 // Check has more
                                 if (data.has_more) {
@@ -270,16 +279,21 @@ class TGS_POS_Full_Sync_Page {
 
                 function showSuccess() {
                     $('#sync-progress').hide();
-                    $('#sync-result').html(
-                        '<div class="notice notice-success"><p><strong>✓ Pull full thành công!</strong></p>' +
+                    var resultHtml = '<div class="notice notice-success"><p><strong>✓ Pull full thành công!</strong></p>' +
                         '<ul>' +
                         '<li>Tổng batches: ' + batchCount + '</li>' +
                         '<li>Categories: ' + totalRecords.categories + '</li>' +
                         '<li>Products: ' + totalRecords.products + '</li>' +
                         '<li>Policies: ' + totalRecords.policies + '</li>' +
-                        '<li>Lots: ' + totalRecords.lots + '</li>' +
-                        '</ul></div>'
-                    ).show();
+                        '<li>Lots: ' + totalRecords.lots + '</li>';
+
+                    if (totalRecords.local > 0) {
+                        resultHtml += '<li>Local records: ' + totalRecords.local + '</li>';
+                    }
+
+                    resultHtml += '</ul></div>';
+
+                    $('#sync-result').html(resultHtml).show();
                     $('#full-sync-form').show();
                 }
 
