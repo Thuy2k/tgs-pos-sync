@@ -38,10 +38,13 @@ class TGS_POS_Sync_Engine {
 
     /**
      * Full sync (push + pull)
+     * Push local ledger to Hub, then pull back from Hub
      */
     public static function full_sync() {
         $push_result = self::push_to_hub();
-        $pull_result = self::pull_from_hub();
+
+        // Pull local ledger data back from Hub (not schema)
+        $pull_result = TGS_POS_Pull_Handler::pull_local_tables();
 
         return array(
             'push' => $push_result,

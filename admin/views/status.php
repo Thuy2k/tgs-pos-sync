@@ -217,17 +217,19 @@ jQuery(document).ready(function($) {
             url: ajaxurl,
             method: 'POST',
             data: {
-                action: 'tgs_pos_manual_push', // Push action already includes pull local
+                action: 'tgs_pos_manual_full_sync', // Push + Pull LOCAL
                 nonce: '<?php echo wp_create_nonce('tgs_pos_manual_sync'); ?>'
             },
             success: function(response) {
                 if (response.success) {
-                    var data = response.data;
-                    var pushed = data.pushed || 0;
-                    var accepted = data.accepted || 0;
-                    var rejected = data.rejected || 0;
-                    var deleted = data.deleted || 0;
-                    var pulled = data.pulled || 0;
+                    var pushData = response.data.push || {};
+                    var pullData = response.data.pull || {};
+
+                    var pushed = pushData.pushed || 0;
+                    var accepted = pushData.accepted || 0;
+                    var rejected = pushData.rejected || 0;
+                    var deleted = pushData.deleted || 0;
+                    var pulled = pullData.pulled || 0;
 
                     var msg = 'Sync thành công! ';
                     msg += 'Pushed: ' + pushed + ' events, ';

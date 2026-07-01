@@ -32,6 +32,9 @@ class TGS_POS_Pull_Handler {
         $changes = $result['data']['changes'] ?? array();
         $applied = 0;
 
+        // Track max updated_at from pulled data (same pattern as Pull Global)
+        $max_updated_at = $last_pull;
+
         foreach ($changes as $change) {
             $table = $change['table_name'];
             $action = $change['action'];
@@ -40,9 +43,19 @@ class TGS_POS_Pull_Handler {
             if (self::apply_change($table, $action, $payload)) {
                 $applied++;
             }
+
+            // Track max updated_at from this change
+            $updated_at = $change['updated_at'] ?? $payload['updated_at'] ?? null;
+            if ($updated_at && $updated_at > $max_updated_at) {
+                $max_updated_at = $updated_at;
+            }
         }
 
-        TGS_POS_Config::set('last_pull_local_at', current_time('mysql'));
+        // Only update watermark if we got data (same as Pull Global logic)
+        // If pull returns 0 records, keep old watermark
+        if ($max_updated_at && $max_updated_at > $last_pull) {
+            TGS_POS_Config::set('last_pull_local_at', $max_updated_at);
+        }
 
         return array(
             'success' => true,

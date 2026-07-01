@@ -180,13 +180,23 @@ class TGS_POS_HTTP_Client {
         ));
 
         if (is_wp_error($response)) {
+            error_log('[TGS POS Sync] Pull local error: ' . $response->get_error_message());
             return array('success' => false, 'message' => $response->get_error_message());
         }
 
+        $raw_body = wp_remote_retrieve_body($response);
         $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        // Remove BOM if present
+        $raw_body = preg_replace('/^\xEF\xBB\xBF/', '', $raw_body);
+        $body = json_decode($raw_body, true);
+
+        error_log('[TGS POS Sync] Pull local response code: ' . $code);
+        error_log('[TGS POS Sync] Pull local URL: ' . $url);
+        error_log('[TGS POS Sync] Pull local changes count: ' . count($body['changes'] ?? array()));
 
         if ($code !== 200) {
+            error_log('[TGS POS Sync] Pull local failed: ' . ($body['message'] ?? 'Unknown error'));
             return array('success' => false, 'message' => $body['message'] ?? 'Pull local failed');
         }
 
