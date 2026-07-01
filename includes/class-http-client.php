@@ -16,13 +16,11 @@ class TGS_POS_HTTP_Client {
      * Register với Hub bằng QR Code token
      */
     public static function register($hub_url, $setup_token) {
+        // Use GET instead of POST to bypass REST API restrictions
         $url = trailingslashit($hub_url) . 'wp-json/tgs-hub/v1/auth/register';
+        $url = add_query_arg('setup_token', $setup_token, $url);
 
-        $response = wp_remote_post($url, array(
-            'body' => json_encode(array('setup_token' => $setup_token)),
-            'headers' => array(
-                'Content-Type' => 'application/json',
-            ),
+        $response = wp_remote_get($url, array(
             'timeout' => 30,
             'sslverify' => false, // For local testing only
         ));
