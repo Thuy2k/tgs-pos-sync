@@ -150,7 +150,9 @@ class TGS_POS_Pull_Handler {
             'wp_local_ledger' => array(
                 // Bảng con có foreign key trỏ đến local_ledger
                 array('table' => 'local_ledger_item', 'fk' => 'local_ledger_id'),
-                array('table' => 'local_ledger_meta', 'fk' => 'local_ledger_id'),
+                array('table' => 'local_ledger_meta', 'fk' => 'local_ledger_id'), // Nếu có cột link ngược
+                // Parent-child relationship: child ledger trỏ đến parent
+                array('table' => 'local_ledger', 'fk' => 'local_ledger_parent_id'),
             ),
         );
 
