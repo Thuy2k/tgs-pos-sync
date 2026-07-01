@@ -80,18 +80,18 @@ class TGS_POS_Pull_Handler {
         switch ($action) {
             case 'insert':
             case 'update':
-                // For ledger table, check duplicate by code
-                if ($table_name === 'wp_local_ledger' && !empty($payload['local_ledger_code'])) {
+                // For ledger table, check duplicate by PRIMARY KEY (Hub's ID)
+                if ($table_name === 'wp_local_ledger' && !empty($payload['local_ledger_id'])) {
                     $exists = $wpdb->get_var($wpdb->prepare(
-                        "SELECT local_ledger_id FROM {$table} WHERE local_ledger_code = %s",
-                        $payload['local_ledger_code']
+                        "SELECT local_ledger_id FROM {$table} WHERE local_ledger_id = %d",
+                        $payload['local_ledger_id']
                     ));
 
                     if ($exists) {
-                        // Skip - record with same code already exists
-                        return true;
+                        // Update existing record with Hub's data
+                        $wpdb->update($table, $payload, array('local_ledger_id' => $payload['local_ledger_id']));
                     } else {
-                        // Insert with Hub's ID
+                        // Insert new record with Hub's ID
                         $wpdb->insert($table, $payload);
                     }
                 }

@@ -62,6 +62,7 @@ class TGS_POS_Sync {
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-pull-applier.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-event-logger.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-id-mapper.php';
+        require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-order-sync-listener.php';
 
         // Admin classes
         if (is_admin()) {
@@ -83,6 +84,9 @@ class TGS_POS_Sync {
 
         add_action('plugins_loaded', array($this, 'load_textdomain'));
         add_action('plugins_loaded', array($this, 'check_database_schema'));
+
+        // Initialize order sync listener
+        TGS_POS_Order_Sync_Listener::init();
 
         // Admin menu
         if (is_admin()) {
