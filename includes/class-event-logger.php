@@ -220,17 +220,14 @@ class TGS_POS_Event_Logger {
         global $wpdb;
         $table = $wpdb->prefix . TGS_POS_TABLE_OUTBOX;
 
-        return $wpdb->update(
-            $table,
-            array(
-                'status' => 'error',
-                'error_message' => $error_message,
-                'retry_count' => new \stdClass(), // triggers retry_count = retry_count + 1
-            ),
-            array('event_id' => $event_id),
-            array('%s', '%s'),
-            array('%s')
-        );
+        // Increment retry_count manually
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET status = 'error', error_message = %s, retry_count = retry_count + 1 WHERE event_id = %s",
+            $error_message,
+            $event_id
+        ));
+
+        return $wpdb->rows_affected > 0;
     }
 
     /**

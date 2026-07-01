@@ -76,14 +76,20 @@ class TGS_POS_HTTP_Client {
         ));
 
         if (is_wp_error($response)) {
+            error_log('[TGS POS Sync] Push error: ' . $response->get_error_message());
             return array('success' => false, 'message' => $response->get_error_message());
         }
 
         $body = json_decode(wp_remote_retrieve_body($response), true);
         $code = wp_remote_retrieve_response_code($response);
 
+        error_log('[TGS POS Sync] Push response code: ' . $code);
+        error_log('[TGS POS Sync] Push response body: ' . wp_remote_retrieve_body($response));
+
         if ($code !== 200) {
-            return array('success' => false, 'message' => $body['message'] ?? 'Push failed');
+            $message = $body['message'] ?? 'Push failed';
+            error_log('[TGS POS Sync] Push failed: ' . $message);
+            return array('success' => false, 'message' => $message);
         }
 
         return array('success' => true, 'data' => $body);
