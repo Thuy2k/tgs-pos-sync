@@ -57,7 +57,7 @@ class TGS_POS_Sync {
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-qr-scanner.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-schema-pull-handler.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-sync-engine.php';
-        require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-pull-handler.php'; // NEW: Pull local tables before push
+        require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-pull-handler.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-push-collector.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-pull-applier.php';
         require_once TGS_POS_SYNC_PLUGIN_DIR . 'includes/class-event-logger.php';

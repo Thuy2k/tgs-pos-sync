@@ -103,48 +103,43 @@ class TGS_POS_Event_Logger {
     }
 
     /**
-     * Log order with items và meta - Atomic transaction
+     * Log order with items và meta - Single event with full payload
      *
      * @param array $ledger_data Dữ liệu bảng ledger
      * @param array $items Array of items data
-     * @param array $metas Array of meta data
-     * @return array Transaction info
+     * @param array $meta Meta data
+     * @return string|false Event ID
      */
-    public static function log_order_transaction($ledger_data, $items = array(), $metas = array()) {
-        $events = array();
+    public static function log_order_transaction($ledger_data, $items = array(), $meta = array()) {
+        global $wpdb;
+        $table = $wpdb->prefix . TGS_POS_TABLE_OUTBOX;
 
-        // Event 1: Parent - Ledger
-        $events[] = array(
-            'event_type' => 'order_created',
-            'table_name' => 'wp_local_ledger',
-            'operation' => 'INSERT',
-            'data' => $ledger_data,
+        $event_id = self::generate_event_id();
+        $ledger_id = $ledger_data['local_ledger_id'] ?? time();
+
+        // Embed full order data in payload
+        $full_payload = array(
+            'ledger' => $ledger_data,
+            'items' => $items,
+            'meta' => $meta,
         );
 
-        // Event 2-N: Children - Items
-        foreach ($items as $item) {
-            $events[] = array(
-                'event_type' => 'order_item_created',
-                'table_name' => 'wp_local_ledger_item',
+        $result = $wpdb->insert(
+            $table,
+            array(
+                'event_id' => $event_id,
+                'transaction_id' => 'txn_order_' . $ledger_id,
+                'parent_event_id' => null,
+                'event_type' => 'order_created',
+                'table_name' => 'wp_local_ledger',
                 'operation' => 'INSERT',
-                'data' => $item,
-            );
-        }
+                'data' => json_encode($full_payload, JSON_UNESCAPED_UNICODE),
+                'status' => 'pending',
+            ),
+            array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
+        );
 
-        // Event N+1-M: Children - Metas
-        foreach ($metas as $meta) {
-            $events[] = array(
-                'event_type' => 'order_meta_created',
-                'table_name' => 'wp_local_ledger_meta',
-                'operation' => 'INSERT',
-                'data' => $meta,
-            );
-        }
-
-        $ledger_id = $ledger_data['local_ledger_id'] ?? time();
-        $transaction_id = 'txn_order_' . $ledger_id;
-
-        return self::log_transaction($events, $transaction_id);
+        return $result ? $event_id : false;
     }
 
     /**

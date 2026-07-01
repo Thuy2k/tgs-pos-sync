@@ -128,11 +128,61 @@ class TGS_POS_HTTP_Client {
             return array('success' => false, 'message' => $response->get_error_message());
         }
 
-        $body = json_decode(wp_remote_retrieve_body($response), true);
         $code = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
 
         if ($code !== 200) {
             return array('success' => false, 'message' => $body['message'] ?? 'Pull failed');
+        }
+
+        return array('success' => true, 'data' => $body);
+    }
+
+    /**
+     * Pull local tables từ Hub (ledger, items, meta)
+     */
+    public static function pull_local($last_pull = null, $tables = array()) {
+        $hub_url = TGS_POS_Config::get_hub_url();
+        $token = TGS_POS_Config::get_client_token();
+        $blog_id = TGS_POS_Config::get('blog_id');
+        $store_id = TGS_POS_Config::get('store_id');
+
+        if (!$hub_url || !$token || !$blog_id) {
+            return array('success' => false, 'message' => 'Not registered');
+        }
+
+        $url = trailingslashit($hub_url) . 'wp-json/tgs-hub/v1/sync/pull-local';
+
+        $args = array();
+        if ($last_pull) {
+            $args['last_pull_at'] = $last_pull;
+        }
+        if (!empty($tables)) {
+            $args['tables'] = implode(',', $tables);
+        }
+
+        if (!empty($args)) {
+            $url = add_query_arg($args, $url);
+        }
+
+        $response = wp_remote_get($url, array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $token,
+                'X-Blog-ID' => $blog_id,
+                'X-Store-ID' => $store_id ?: '',
+            ),
+            'timeout' => 60,
+        ));
+
+        if (is_wp_error($response)) {
+            return array('success' => false, 'message' => $response->get_error_message());
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($code !== 200) {
+            return array('success' => false, 'message' => $body['message'] ?? 'Pull local failed');
         }
 
         return array('success' => true, 'data' => $body);

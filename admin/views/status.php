@@ -28,7 +28,7 @@ if (!defined('ABSPATH')) {
             <p>
                 <button type="button" class="button button-primary" id="tgs-full-sync-btn">
                     <span class="dashicons dashicons-update" style="vertical-align: middle;"></span>
-                    <?php _e('Kéo về & Đẩy lên (LOCAL)', 'tgs-pos-sync'); ?>
+                    <?php _e('Đẩy lên & Kéo về (LOCAL)', 'tgs-pos-sync'); ?>
                 </button>
                 <button type="button" class="button button-primary" id="tgs-pull-btn">
                     <span class="dashicons dashicons-download" style="vertical-align: middle;"></span>
@@ -152,7 +152,7 @@ if (!defined('ABSPATH')) {
         <div style="background: #f6f7f7; padding: 15px; border-left: 4px solid #646970; margin: 20px 0;">
             <h3 style="margin-top: 0;"><?php _e('Lịch tự động (Cron)', 'tgs-pos-sync'); ?></h3>
             <ul>
-                <li><?php _e('Kéo về & Đẩy lên LOCAL: Mỗi 5 phút (Pull local tables → Push events)', 'tgs-pos-sync'); ?></li>
+                <li><?php _e('Đẩy lên & Kéo về LOCAL: Mỗi 5 phút (Push events → Delete local → Pull from Hub)', 'tgs-pos-sync'); ?></li>
                 <li><?php _e('Pull GLOBAL từ Hub: Mỗi 10 phút (Categories, Products, Policies, Lots)', 'tgs-pos-sync'); ?></li>
             </ul>
         </div>
@@ -208,7 +208,7 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // Kéo về & Đẩy lên (LOCAL) - Pull local tables + Push
+    // Đẩy lên & Kéo về (LOCAL) - Push → Delete → Pull
     $('#tgs-full-sync-btn').on('click', function() {
         var $btn = $(this);
         $btn.prop('disabled', true).html('<span class="dashicons dashicons-update" style="animation: spin 1s linear infinite; vertical-align: middle;"></span> Đang sync LOCAL...');
@@ -223,15 +223,18 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response.success) {
                     var data = response.data;
-                    var pulled = data.pulled || 0;
-                    var conflicts = data.conflicts_resolved || 0;
                     var pushed = data.pushed || 0;
-                    var accepted = (data.applied && data.applied.length) || 0;
+                    var accepted = data.accepted || 0;
+                    var rejected = data.rejected || 0;
+                    var deleted = data.deleted || 0;
+                    var pulled = data.pulled || 0;
 
-                    var msg = 'Sync LOCAL thành công! ';
-                    if (pulled > 0) msg += 'Kéo về: ' + pulled + ' records. ';
-                    if (conflicts > 0) msg += 'Giải quyết: ' + conflicts + ' conflicts. ';
-                    msg += 'Đẩy lên: ' + pushed + ' events, Accepted: ' + accepted + '.';
+                    var msg = 'Sync thành công! ';
+                    msg += 'Pushed: ' + pushed + ' events, ';
+                    msg += 'Accepted: ' + accepted + ', ';
+                    if (rejected > 0) msg += 'Rejected: ' + rejected + ', ';
+                    msg += 'Deleted local: ' + deleted + ', ';
+                    msg += 'Pulled from Hub: ' + pulled + '.';
 
                     showResult(msg, 'success');
                     setTimeout(function() { location.reload(); }, 2000);
@@ -240,7 +243,7 @@ jQuery(document).ready(function($) {
                 }
             },
             complete: function() {
-                $btn.prop('disabled', false).html('<span class="dashicons dashicons-update" style="vertical-align: middle;"></span> Kéo về & Đẩy lên (LOCAL)');
+                $btn.prop('disabled', false).html('<span class="dashicons dashicons-update" style="vertical-align: middle;"></span> Đẩy lên & Kéo về (LOCAL)');
             }
         });
     });

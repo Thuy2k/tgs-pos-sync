@@ -13,76 +13,36 @@ if (!defined('ABSPATH')) {
 class TGS_POS_Push_Collector {
 
     /**
-     * Collect và push events lên Hub
-     * Hỗ trợ transaction atomicity - chỉ push khi có đủ events trong transaction
-     *
-     * IMPORTANT: Pull local tables từ Hub TRƯỚC khi push để tránh conflict
+     * Push events lên Hub, sau đó xóa local data và pull về
      */
     public static function push() {
-        // Check if registered
         if (!TGS_POS_Config::is_registered()) {
             return array('success' => false, 'message' => 'Not registered with Hub');
         }
 
-        // STEP 1: Pull local tables từ Hub trước (conflict prevention)
-        $pull_result = TGS_POS_Pull_Handler::pull_local_tables();
-
-        if (!$pull_result['success']) {
-            error_log('[TGS POS Sync] Pull failed before push: ' . $pull_result['message']);
-            // Không return error - vẫn cho phép push nếu pull fail
-        } else {
-            error_log('[TGS POS Sync] Pull before push: pulled=' . $pull_result['pulled'] . ', conflicts_resolved=' . $pull_result['conflicts_resolved']);
-        }
-
-        // STEP 2: Get pending events
         $events = TGS_POS_Event_Logger::get_pending_events(50);
 
         if (empty($events)) {
             return array('success' => true, 'message' => 'No events to push', 'pushed' => 0);
         }
 
-        // Group events by transaction_id
-        $grouped = self::group_by_transaction($events);
-
-        // Chỉ push transactions hoàn chỉnh
-        $ready_events = array();
-        foreach ($grouped as $txn_id => $txn_events) {
-            if (self::is_transaction_complete($txn_events)) {
-                $ready_events = array_merge($ready_events, $txn_events);
-            }
-        }
-
-        if (empty($ready_events)) {
-            return array('success' => true, 'message' => 'No complete transactions to push', 'pushed' => 0, 'waiting' => count($events));
-        }
-
-        // Transform to API format (match Hub API expectations)
+        // Transform to API format
         $api_events = array();
-        foreach ($ready_events as $event) {
+        foreach ($events as $event) {
             $data = json_decode($event['data'], true);
 
-            // Extract record_id from data (primary key varies by table)
-            $record_id = 0;
-            if (isset($data['local_ledger_id'])) {
-                $record_id = $data['local_ledger_id'];
-            } elseif (isset($data['local_ledger_item_id'])) {
-                $record_id = $data['local_ledger_item_id'];
-            } elseif (isset($data['local_ledger_meta_id'])) {
-                $record_id = $data['local_ledger_meta_id'];
-            } elseif (isset($data['id'])) {
-                $record_id = $data['id'];
-            }
+            // Extract ledger_id from full payload
+            $ledger_id = $data['ledger']['local_ledger_id'] ?? 0;
 
             $api_events[] = array(
                 'event_id' => $event['event_id'],
                 'transaction_id' => $event['transaction_id'],
-                'parent_event_id' => $event['parent_event_id'],
                 'table_name' => $event['table_name'],
-                'record_id' => $record_id,
-                'action' => strtolower($event['operation']), // INSERT → insert
+                'record_id' => $ledger_id,
+                'action' => strtolower($event['operation']),
                 'occurred_at' => $event['created_at'],
                 'data_hash' => md5(json_encode($data)),
-                'payload' => $data, // Hub API expects 'payload', not 'data'
+                'payload' => $data,
             );
         }
 
@@ -90,86 +50,83 @@ class TGS_POS_Push_Collector {
         $result = TGS_POS_HTTP_Client::push($api_events);
 
         if (!$result['success']) {
-            // Mark all as error
-            foreach ($ready_events as $event) {
-                TGS_POS_Event_Logger::mark_as_error($event['event_id'], $result['message']);
-            }
-
-            return array(
-                'success' => false,
-                'message' => $result['message'],
-                'pushed' => 0,
-                'failed' => count($ready_events),
-            );
+            error_log('[TGS POS Sync] Push failed: ' . $result['message']);
+            return array('success' => false, 'message' => $result['message']);
         }
 
-        // Mark all as sent
-        $event_ids = array();
-        foreach ($ready_events as $event) {
-            TGS_POS_Event_Logger::mark_as_sent($event['event_id']);
-            $event_ids[] = $event['event_id'];
-        }
+        $accepted = $result['data']['accepted'] ?? array();
+        $rejected = $result['data']['rejected'] ?? array();
 
-        // Send ACK
-        TGS_POS_HTTP_Client::ack($event_ids, array());
-
-        // Mark all as acked
-        foreach ($event_ids as $event_id) {
+        // Mark events as acked
+        foreach ($accepted as $event_id) {
             TGS_POS_Event_Logger::mark_as_acked($event_id);
         }
 
-        // Update last push time
+        // Mark rejected as error
+        foreach ($rejected as $event_id) {
+            TGS_POS_Event_Logger::mark_as_error($event_id, 'Rejected by Hub');
+        }
+
+        // Delete local data for accepted events and pull from Hub
+        $deleted = 0;
+        $pulled = 0;
+
+        if (!empty($accepted)) {
+            foreach ($events as $event) {
+                if (in_array($event['event_id'], $accepted)) {
+                    $data = json_decode($event['data'], true);
+                    $ledger_id = $data['ledger']['local_ledger_id'] ?? 0;
+
+                    if ($ledger_id) {
+                        self::delete_local_order($ledger_id);
+                        $deleted++;
+                    }
+                }
+            }
+
+            // Pull from Hub to sync data
+            $pull_result = TGS_POS_Pull_Handler::pull_local_tables();
+            $pulled = $pull_result['pulled'] ?? 0;
+        }
+
         TGS_POS_Config::set('last_push_at', current_time('mysql'));
 
         return array(
             'success' => true,
             'message' => 'Pushed successfully',
-            'pulled' => $pull_result['pulled'] ?? 0,
-            'conflicts_resolved' => $pull_result['conflicts_resolved'] ?? 0,
-            'pushed' => count($ready_events),
-            'waiting' => count($events) - count($ready_events),
-            'applied' => $result['data']['accepted'] ?? array(),
-            'rejected' => $result['data']['rejected'] ?? array(),
+            'pushed' => count($api_events),
+            'accepted' => count($accepted),
+            'rejected' => count($rejected),
+            'deleted' => $deleted,
+            'pulled' => $pulled,
         );
     }
 
     /**
-     * Group events by transaction_id
+     * Delete local order data (ledger + items + meta)
      */
-    private static function group_by_transaction($events) {
-        $grouped = array();
+    private static function delete_local_order($ledger_id) {
+        global $wpdb;
 
-        foreach ($events as $event) {
-            $txn_id = $event['transaction_id'] ?? 'single_' . $event['event_id'];
-            if (!isset($grouped[$txn_id])) {
-                $grouped[$txn_id] = array();
-            }
-            $grouped[$txn_id][] = $event;
-        }
+        // Delete items
+        $wpdb->delete(
+            $wpdb->prefix . 'local_ledger_item',
+            array('local_ledger_id' => $ledger_id),
+            array('%d')
+        );
 
-        return $grouped;
-    }
+        // Delete meta
+        $wpdb->delete(
+            $wpdb->prefix . 'local_ledger_meta',
+            array('local_ledger_id' => $ledger_id),
+            array('%d')
+        );
 
-    /**
-     * Check nếu transaction đã complete (có đủ parent + children)
-     */
-    private static function is_transaction_complete($txn_events) {
-        // Single event (không có transaction_id) → complete
-        if (count($txn_events) === 1 && empty($txn_events[0]['transaction_id'])) {
-            return true;
-        }
-
-        // Transaction events → check có parent không
-        $has_parent = false;
-        foreach ($txn_events as $event) {
-            if (empty($event['parent_event_id'])) {
-                $has_parent = true;
-                break;
-            }
-        }
-
-        // Nếu có parent → complete (giả định đã log đủ)
-        // Logic phức tạp hơn: check expected_count từ parent metadata
-        return $has_parent;
+        // Delete ledger
+        $wpdb->delete(
+            $wpdb->prefix . 'local_ledger',
+            array('local_ledger_id' => $ledger_id),
+            array('%d')
+        );
     }
 }
