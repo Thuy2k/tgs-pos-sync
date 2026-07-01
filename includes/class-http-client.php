@@ -29,12 +29,16 @@ class TGS_POS_HTTP_Client {
             return array('success' => false, 'message' => $response->get_error_message());
         }
 
-        $body = json_decode(wp_remote_retrieve_body($response), true);
+        // Remove BOM if present (fixes json_decode issue)
+        $raw_body = wp_remote_retrieve_body($response);
+        $raw_body = preg_replace('/^\xEF\xBB\xBF/', '', $raw_body); // Strip UTF-8 BOM
+
+        $body = json_decode($raw_body, true);
         $code = wp_remote_retrieve_response_code($response);
 
         // Debug log
         error_log('HTTP Client - Response code: ' . $code);
-        error_log('HTTP Client - Response body: ' . wp_remote_retrieve_body($response));
+        error_log('HTTP Client - Response body: ' . $raw_body);
         error_log('HTTP Client - Decoded body: ' . print_r($body, true));
 
         if ($code !== 200) {
