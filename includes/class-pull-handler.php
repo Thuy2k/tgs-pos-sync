@@ -80,15 +80,70 @@ class TGS_POS_Pull_Handler {
         switch ($action) {
             case 'insert':
             case 'update':
-                $exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$table} WHERE {$pk} = %d",
-                    $record_id
-                ));
+                // For ledger table, check duplicate by code
+                if ($table_name === 'wp_local_ledger' && !empty($payload['local_ledger_code'])) {
+                    $exists = $wpdb->get_var($wpdb->prepare(
+                        "SELECT local_ledger_id FROM {$table} WHERE local_ledger_code = %s",
+                        $payload['local_ledger_code']
+                    ));
 
-                if ($exists) {
-                    $wpdb->update($table, $payload, array($pk => $record_id));
-                } else {
-                    $wpdb->insert($table, $payload);
+                    if ($exists) {
+                        // Skip - record with same code already exists
+                        return true;
+                    } else {
+                        // Insert with Hub's ID
+                        $wpdb->insert($table, $payload);
+                    }
+                }
+                // For item table, check if same ledger_id + product combination exists
+                elseif ($table_name === 'wp_local_ledger_item') {
+                    $ledger_id = $payload['local_ledger_id'] ?? 0;
+                    $product_id = $payload['local_product_name_id'] ?? 0;
+
+                    if ($ledger_id && $product_id) {
+                        $exists = $wpdb->get_var($wpdb->prepare(
+                            "SELECT local_ledger_item_id FROM {$table}
+                             WHERE local_ledger_id = %d AND local_product_name_id = %d",
+                            $ledger_id, $product_id
+                        ));
+
+                        if ($exists) {
+                            // Update existing item
+                            $wpdb->update($table, $payload, array(
+                                'local_ledger_id' => $ledger_id,
+                                'local_product_name_id' => $product_id
+                            ));
+                        } else {
+                            // Insert new item
+                            $wpdb->insert($table, $payload);
+                        }
+                    }
+                }
+                // For meta table, check by primary key only (1-1 with ledger)
+                elseif ($table_name === 'wp_local_ledger_meta') {
+                    $exists = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM {$table} WHERE {$pk} = %d",
+                        $record_id
+                    ));
+
+                    if ($exists) {
+                        $wpdb->update($table, $payload, array($pk => $record_id));
+                    } else {
+                        $wpdb->insert($table, $payload);
+                    }
+                }
+                // Other tables: check by primary key
+                else {
+                    $exists = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM {$table} WHERE {$pk} = %d",
+                        $record_id
+                    ));
+
+                    if ($exists) {
+                        $wpdb->update($table, $payload, array($pk => $record_id));
+                    } else {
+                        $wpdb->insert($table, $payload);
+                    }
                 }
                 break;
 
