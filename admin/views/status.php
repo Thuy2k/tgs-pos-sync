@@ -36,7 +36,7 @@ if (!defined('ABSPATH')) {
                 </button>
                 <button type="button" class="button button-secondary" id="tgs-full-sync-btn">
                     <span class="dashicons dashicons-update" style="vertical-align: middle;"></span>
-                    <?php _e('Full Sync', 'tgs-pos-sync'); ?>
+                    <?php _e('Push + Pull', 'tgs-pos-sync'); ?>
                 </button>
             </p>
             <div id="tgs-sync-result"></div>
@@ -266,7 +266,7 @@ jQuery(document).ready(function($) {
                     if (upserted.policies) pullCount += (upserted.policies.inserted || 0) + (upserted.policies.updated || 0);
                     if (upserted.lots) pullCount += (upserted.lots.inserted || 0) + (upserted.lots.updated || 0);
 
-                    showResult('Full sync thành công!<br>Push: ' + pushCount + ' events<br>Pull: ' + pullCount + ' records', 'success');
+                    showResult('Đồng bộ thành công!<br>Push: ' + pushCount + ' events<br>Pull: ' + pullCount + ' records', 'success');
                     setTimeout(function() { location.reload(); }, 2000);
                 } else {
                     showResult('Lỗi khi full sync', 'error');
