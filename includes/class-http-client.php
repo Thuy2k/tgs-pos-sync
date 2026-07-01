@@ -20,8 +20,11 @@ class TGS_POS_HTTP_Client {
 
         $response = wp_remote_post($url, array(
             'body' => json_encode(array('setup_token' => $setup_token)),
-            'headers' => array('Content-Type' => 'application/json'),
+            'headers' => array(
+                'Content-Type' => 'application/json',
+            ),
             'timeout' => 30,
+            'sslverify' => false, // For local testing only
         ));
 
         if (is_wp_error($response)) {
@@ -32,10 +35,10 @@ class TGS_POS_HTTP_Client {
         $code = wp_remote_retrieve_response_code($response);
 
         if ($code !== 200) {
-            return array('success' => false, 'message' => $body['message'] ?? 'Unknown error');
+            return array('success' => false, 'message' => $body['message'] ?? 'Unknown error', 'code' => $code, 'body' => $body);
         }
 
-        return array('success' => true, 'data' => $body);
+        return array('success' => true, 'data' => $body['data']);
     }
 
     /**

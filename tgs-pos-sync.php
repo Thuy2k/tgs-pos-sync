@@ -100,7 +100,9 @@ class TGS_POS_Sync {
      * Plugin activation
      */
     public function activate() {
+        ob_start(); // Suppress output
         TGS_POS_Database::create_tables();
+        ob_end_clean();
 
         // Add custom cron schedule
         add_filter('cron_schedules', array($this, 'add_cron_schedules'));

@@ -30,8 +30,28 @@ class TGS_POS_QR_Scanner {
             return array('success' => false, 'message' => __('QR Code không hợp lệ', 'tgs-pos-sync'));
         }
 
-        // Gọi API đăng ký
-        $result = TGS_POS_HTTP_Client::register($qr_data['hub_url'], $qr_data['setup_token']);
+        // Check if testing within same WordPress instance (internal call)
+        $current_site_url = get_site_url(1); // Main site URL
+        $is_internal = (strpos($qr_data['hub_url'], $current_site_url) === 0);
+
+        if ($is_internal && class_exists('TGS_Hub_Auth_Handler')) {
+            // Direct internal call - bypass HTTP
+            $request = new WP_REST_Request('POST', '/tgs-hub/v1/auth/register');
+            $request->set_param('setup_token', $qr_data['setup_token']);
+
+            $response = TGS_Hub_Auth_Handler::register($request);
+
+            if (is_wp_error($response)) {
+                return array('success' => false, 'message' => $response->get_error_message());
+            }
+
+            // Extract data from WP_REST_Response (already has 'success' and 'data' structure)
+            $response_data = $response->get_data();
+            $result = array('success' => $response_data['success'], 'data' => $response_data['data']);
+        } else {
+            // External call via HTTP
+            $result = TGS_POS_HTTP_Client::register($qr_data['hub_url'], $qr_data['setup_token']);
+        }
 
         if (!$result['success']) {
             return $result;
