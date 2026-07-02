@@ -283,7 +283,7 @@ class TGS_POS_HTTP_Client {
      * @param array $cursors Cursors cho từng bảng: ['categories' => 123, 'products' => 456, ...]
      * @return array Response with success/data
      */
-    public static function pull_schema($since = null, $cursors = array()) {
+    public static function pull_schema($since = null, $cursors = array(), $selected_tables = null) {
         $hub_url = TGS_POS_Config::get_hub_url();
         $token = TGS_POS_Config::get_client_token();
         $blog_id = TGS_POS_Config::get_blog_id();
@@ -299,18 +299,30 @@ class TGS_POS_HTTP_Client {
             $url = add_query_arg('since', $since, $url);
         }
 
-        // Thêm cursors nếu có (pagination)
-        if (!empty($cursors['categories'])) {
+        // Thêm selected_tables nếu có (chỉ fetch bảng được chọn - TĂNG TỐC)
+        if ($selected_tables && is_array($selected_tables)) {
+            $url = add_query_arg('selected_tables', implode(',', $selected_tables), $url);
+        }
+
+        // Thêm cursors nếu có (pagination) - dùng isset thay vì !empty để hỗ trợ cursor = 0
+        if (isset($cursors['categories'])) {
             $url = add_query_arg('cursor_cat', $cursors['categories'], $url);
         }
-        if (!empty($cursors['products'])) {
+        if (isset($cursors['products'])) {
             $url = add_query_arg('cursor_product', $cursors['products'], $url);
         }
-        if (!empty($cursors['policies'])) {
+        if (isset($cursors['policies'])) {
             $url = add_query_arg('cursor_policy', $cursors['policies'], $url);
         }
-        if (!empty($cursors['lots'])) {
+        if (isset($cursors['lots'])) {
             $url = add_query_arg('cursor_lot', $cursors['lots'], $url);
+        }
+
+        // Thêm cursors cho các bảng mới (dynamic keys)
+        foreach ($cursors as $key => $value) {
+            if (!in_array($key, ['categories', 'products', 'policies', 'lots']) && isset($value)) {
+                $url = add_query_arg('cursor_' . $key, $value, $url);
+            }
         }
 
         $response = wp_remote_get($url, array(

@@ -194,16 +194,7 @@ class TGS_POS_Full_Sync_Page {
                     purchase_policy_items: 0,
                     local: 0
                 };
-                var cursors = {
-                    categories: 0,
-                    products: 0,
-                    policies: 0,
-                    policy_items: 0,
-                    lots: 0,
-                    suppliers: 0,
-                    purchase_policies: 0,
-                    purchase_policy_items: 0
-                };
+                var cursors = {}; // Batch đầu không gửi cursors, Hub sẽ dùng default PHP_INT_MAX
 
                 // Step 1: Truncate tables
                 updateStatus('Bước 1: Xóa data cũ...');

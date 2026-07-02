@@ -60,11 +60,34 @@ class TGS_POS_Schema_Manager {
                 $execute_result = TGS_POS_Database_Schema::execute_sql_statements($schema_data['sql_statements']);
             }
 
-            // 5. UPSERT dữ liệu GLOBAL batch này
-            $upsert_result = self::upsert_global_data($schema_data['global_data']);
-            if (!$upsert_result['success']) {
-                return $upsert_result;
+            // 5. UPSERT dữ liệu GLOBAL batch này (dùng direct để auto-detect keys)
+            $batch_summary = self::upsert_global_data_direct($schema_data['global_data']);
+
+            // Convert sang format cũ để tương thích với code dưới
+            $upsert_result = array(
+                'success' => true,
+                'summary' => array(
+                    'categories' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+                    'products' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+                    'policies' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+                    'lots' => array('inserted' => 0, 'updated' => 0, 'deleted' => 0),
+                ),
+            );
+
+            // Map batch_summary sang format cũ
+            foreach ($batch_summary as $key => $count) {
+                if (in_array($key, ['product_cat', 'categories'])) {
+                    $upsert_result['summary']['categories']['updated'] += $count;
+                } elseif (in_array($key, ['product_name', 'products'])) {
+                    $upsert_result['summary']['products']['updated'] += $count;
+                } elseif (in_array($key, ['selling_policy', 'selling_policies', 'selling_policy_items', 'policy_items'])) {
+                    $upsert_result['summary']['policies']['updated'] += $count;
+                } elseif (in_array($key, ['product_lots', 'lots'])) {
+                    $upsert_result['summary']['lots']['updated'] += $count;
+                }
             }
+
+            error_log('[Shop] Incremental sync batch summary: ' . print_r($batch_summary, true));
 
             // Note: local_data is NOT pulled here - use "Push & Pull LOCAL" button instead
 

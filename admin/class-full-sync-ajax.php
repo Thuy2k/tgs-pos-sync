@@ -64,19 +64,22 @@ class TGS_POS_Full_Sync_AJAX {
             wp_send_json_error('Permission denied');
         }
 
-        $cursors = isset($_POST['cursors']) ? $_POST['cursors'] : array(
-            'categories' => 0,
-            'products' => 0,
-            'policies' => 0,
-            'lots' => 0,
-        );
+        $cursors = isset($_POST['cursors']) ? $_POST['cursors'] : array();
 
         $batch_count = isset($_POST['batch_count']) ? intval($_POST['batch_count']) : 0;
         $selected_global_tables = isset($_POST['selected_global_tables']) ? $_POST['selected_global_tables'] : array();
         $selected_local_tables = isset($_POST['selected_local_tables']) ? $_POST['selected_local_tables'] : array();
 
-        // Pull một batch từ Hub (since = null để pull full)
-        $result = TGS_POS_HTTP_Client::pull_schema(null, $cursors);
+        // Convert method names -> data keys (sql_global_product_cat -> product_cat)
+        $selected_keys = array();
+        foreach ($selected_global_tables as $method_name) {
+            // sql_global_product_cat -> product_cat
+            $key = str_replace('sql_global_', '', $method_name);
+            $selected_keys[] = $key;
+        }
+
+        // Pull một batch từ Hub (since = null để pull full, gửi selected_keys để tăng tốc)
+        $result = TGS_POS_HTTP_Client::pull_schema(null, $cursors, $selected_keys);
 
         if (!$result['success']) {
             wp_send_json_error('Hub error: ' . ($result['message'] ?? 'Unknown'));
@@ -98,19 +101,22 @@ class TGS_POS_Full_Sync_AJAX {
         // Merge summary
         $batch_summary = array_merge($batch_summary, $local_summary);
 
-        // Check còn data không - CHỈ check nếu có GLOBAL tables được chọn
+        // Check còn data không - check từng bảng riêng
         $has_more = false;
-        if (!empty($selected_global_tables)) {
-            $has_more = $schema_data['global_data']['summary']['has_more'] ?? false;
-        }
+        $next_cursors = array();
 
-        // Update cursors cho batch tiếp theo (chỉ khi có GLOBAL tables)
-        $next_cursors = array(
-            'categories' => $schema_data['global_data']['cursor_cat_next'] ?? PHP_INT_MAX,
-            'products' => $schema_data['global_data']['cursor_product_next'] ?? PHP_INT_MAX,
-            'policies' => $schema_data['global_data']['cursor_policy_next'] ?? PHP_INT_MAX,
-            'lots' => $schema_data['global_data']['cursor_lot_next'] ?? PHP_INT_MAX,
-        );
+        if (!empty($selected_global_tables)) {
+            foreach ($selected_keys as $key) {
+                // Check has_more cho từng bảng
+                $key_has_more = $schema_data['global_data']["has_more_{$key}"] ?? false;
+                if ($key_has_more) {
+                    $has_more = true;
+                }
+
+                // Lưu cursor mới cho từng bảng
+                $next_cursors[$key] = $schema_data['global_data']["cursor_{$key}_next"] ?? PHP_INT_MAX;
+            }
+        }
 
         // Update watermark nếu hết
         if (!$has_more) {
