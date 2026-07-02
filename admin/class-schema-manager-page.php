@@ -54,10 +54,12 @@ class TGS_POS_Schema_Manager_Page {
                             <td><span class="dashicons dashicons-database"></span> Bảng LOCAL</td>
                             <td><code><?php echo esc_html($table['table']); ?></code></td>
                             <td>
-                                <?php if ($table['exists']): ?>
-                                    <span style="color: green;">✓ Đầy đủ</span>
-                                <?php else: ?>
+                                <?php if (!$table['exists']): ?>
                                     <span style="color: orange;">⚠ Chưa tạo</span>
+                                <?php elseif (isset($table['has_all_columns']) && !$table['has_all_columns']): ?>
+                                    <span style="color: red;">⚠ Thiếu cột: <?php echo esc_html(implode(', ', $table['missing_columns'])); ?></span>
+                                <?php else: ?>
+                                    <span style="color: green;">✓ Đầy đủ</span>
                                 <?php endif; ?>
                             </td>
                             <td><?php echo esc_html($table['description']); ?></td>
@@ -84,10 +86,12 @@ class TGS_POS_Schema_Manager_Page {
                             <td><span class="dashicons dashicons-database"></span> Bảng GLOBAL</td>
                             <td><code><?php echo esc_html($table['table']); ?></code></td>
                             <td>
-                                <?php if ($table['exists']): ?>
-                                    <span style="color: green;">✓ Đầy đủ</span>
-                                <?php else: ?>
+                                <?php if (!$table['exists']): ?>
                                     <span style="color: orange;">⚠ Chưa tạo</span>
+                                <?php elseif (isset($table['has_all_columns']) && !$table['has_all_columns']): ?>
+                                    <span style="color: red;">⚠ Thiếu cột: <?php echo esc_html(implode(', ', $table['missing_columns'])); ?></span>
+                                <?php else: ?>
+                                    <span style="color: green;">✓ Đầy đủ</span>
                                 <?php endif; ?>
                             </td>
                             <td><?php echo esc_html($table['description']); ?></td>
@@ -99,15 +103,19 @@ class TGS_POS_Schema_Manager_Page {
                 <!-- Check status -->
                 <?php
                 $all_exists = true;
+                $has_missing_columns = false;
                 foreach (array_merge($schema_info['global'], $schema_info['local']) as $t) {
                     if (!$t['exists']) {
                         $all_exists = false;
                         break;
                     }
+                    if (isset($t['has_all_columns']) && !$t['has_all_columns']) {
+                        $has_missing_columns = true;
+                    }
                 }
                 ?>
 
-                <?php if ($all_exists): ?>
+                <?php if ($all_exists && !$has_missing_columns): ?>
                     <div class="notice notice-success" style="margin-top: 20px;">
                         <p><strong>✓ Hệ thống đã sẵn sàng bán hàng</strong></p>
                         <ul>
@@ -119,12 +127,17 @@ class TGS_POS_Schema_Manager_Page {
                 <?php else: ?>
                     <div class="notice notice-warning" style="margin-top: 20px;">
                         <p><strong>⚠️ Cần đồng bộ schema</strong></p>
-                        <p>Một số bảng chưa được tạo. Click nút bên dưới để tạo.</p>
+                        <?php if (!$all_exists): ?>
+                            <p>Một số bảng chưa được tạo. Click nút bên dưới để tạo.</p>
+                        <?php endif; ?>
+                        <?php if ($has_missing_columns): ?>
+                            <p style="color: red;">Một số bảng thiếu cột đồng bộ. Click nút bên dưới để thêm cột.</p>
+                        <?php endif; ?>
                     </div>
 
                     <p class="submit">
                         <button type="button" id="btn-sync-schema" class="button button-primary button-large">
-                            🔧 Kiểm tra & Tạo bảng
+                            🔧 Kiểm tra & Tạo bảng/Thêm cột
                         </button>
                     </p>
                 <?php endif; ?>
@@ -208,10 +221,21 @@ class TGS_POS_Schema_Manager_Page {
             $table_name = $stmt['table'] ?? '';
             $exists = ($wpdb->get_var("SHOW TABLES LIKE '{$table_name}'") === $table_name);
 
+            // Check missing columns nếu bảng đã tồn tại
+            $missing_columns = array();
+            $has_all_columns = true;
+            if ($exists) {
+                $check = self::check_table_columns($table_name, $stmt['sql'] ?? '');
+                $missing_columns = $check['missing'];
+                $has_all_columns = $check['has_all'];
+            }
+
             $info['global'][] = array(
                 'method' => $stmt['method'] ?? '',
                 'table' => $table_name,
                 'exists' => $exists,
+                'has_all_columns' => $has_all_columns,
+                'missing_columns' => $missing_columns,
                 'description' => self::get_table_description($table_name),
             );
         }
@@ -222,15 +246,97 @@ class TGS_POS_Schema_Manager_Page {
             $table_name = $wpdb->prefix . str_replace('{{prefix}}', '', str_replace('wp_', '', $stmt['table'] ?? ''));
             $exists = ($wpdb->get_var("SHOW TABLES LIKE '{$table_name}'") === $table_name);
 
+            // Check missing columns nếu bảng đã tồn tại
+            $missing_columns = array();
+            $has_all_columns = true;
+            if ($exists) {
+                $check = self::check_table_columns($table_name, $stmt['sql'] ?? '');
+                $missing_columns = $check['missing'];
+                $has_all_columns = $check['has_all'];
+            }
+
             $info['local'][] = array(
                 'method' => $stmt['method'] ?? '',
                 'table' => $table_name,
                 'exists' => $exists,
+                'has_all_columns' => $has_all_columns,
+                'missing_columns' => $missing_columns,
                 'description' => self::get_table_description($table_name),
             );
         }
 
         return $info;
+    }
+
+    /**
+     * Check if table has all required columns from CREATE TABLE SQL
+     *
+     * @param string $table_name Full table name
+     * @param string $sql CREATE TABLE statement
+     * @return array ['has_all' => bool, 'missing' => array]
+     */
+    private static function check_table_columns($table_name, $sql) {
+        global $wpdb;
+
+        // Parse required columns from SQL
+        $required_columns = self::parse_columns_from_sql($sql);
+
+        // Get actual columns in database
+        $db_columns = $wpdb->get_col("DESCRIBE {$table_name}", 0);
+
+        // Check which sync columns are missing
+        $sync_columns = array('updated_at', 'deleted_at', 'created_at', 'is_deleted', 'user_id');
+        $missing = array();
+
+        foreach ($sync_columns as $col) {
+            if (in_array($col, $required_columns) && !in_array($col, $db_columns)) {
+                $missing[] = $col;
+            }
+        }
+
+        return array(
+            'has_all' => empty($missing),
+            'missing' => $missing,
+        );
+    }
+
+    /**
+     * Parse column names from CREATE TABLE SQL
+     */
+    private static function parse_columns_from_sql($sql) {
+        $columns = array();
+
+        // Tách phần columns (trước PRIMARY KEY)
+        $primary_pos = stripos($sql, 'PRIMARY KEY');
+        if ($primary_pos !== false) {
+            $columns_part = substr($sql, 0, $primary_pos);
+        } else {
+            $columns_part = $sql;
+        }
+
+        // Tìm phần định nghĩa cột
+        if (preg_match('/CREATE TABLE[^(]+\((.*)/is', $columns_part, $matches)) {
+            $lines = explode("\n", $matches[1]);
+
+            foreach ($lines as $line) {
+                $line = trim($line);
+                $line = rtrim($line, ',');
+
+                // Bỏ qua dòng rỗng, comment
+                if (empty($line) ||
+                    strpos($line, '//') === 0 ||
+                    strpos($line, '--') === 0) {
+                    continue;
+                }
+
+                // Extract column name (có thể có backticks)
+                if (preg_match('/^`?([a-z_][a-z0-9_]*)`?/i', $line, $col_match)) {
+                    $columns[] = $col_match[1];
+                }
+            }
+        }
+
+        return $columns;
     }
 
     /**
