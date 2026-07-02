@@ -218,6 +218,15 @@ class TGS_POS_Schema_Manager {
     /**
      * UPSERT dữ liệu LOCAL từ multisite blog vào local shop
      * INSERT nếu chưa có, UPDATE nếu đã có, DELETE nếu bị xóa
+     * Public wrapper để Pull Handler có thể gọi
+     */
+    public static function upsert_local_data_public($local_data) {
+        return self::upsert_local_data($local_data);
+    }
+
+    /**
+     * UPSERT dữ liệu LOCAL từ multisite blog vào local shop (internal)
+     * INSERT nếu chưa có, UPDATE nếu đã có, DELETE nếu bị xóa
      */
     private static function upsert_local_data($local_data) {
         global $wpdb;

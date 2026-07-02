@@ -13,25 +13,27 @@ if (!defined('ABSPATH')) {
 class TGS_POS_Sync_Engine {
 
     /**
-     * Push to Hub (triggered by cron or manual)
+     * Push to Hub + Pull LOCAL (triggered by cron or manual)
+     * Push local ledger → Delete synced → Pull LOCAL từ Hub
      */
     public static function push_to_hub() {
-        $result = TGS_POS_Push_Collector::push();
+        $result = self::full_sync();
 
         // Log result
-        error_log('[TGS POS Sync] Push: ' . json_encode($result));
+        error_log('[TGS POS Sync] Push + Pull LOCAL: ' . json_encode($result));
 
         return $result;
     }
 
     /**
-     * Pull from Hub (triggered by cron or manual)
+     * Pull GLOBAL from Hub (triggered by cron or manual)
+     * Pull GLOBAL data: categories, products, policies, lots
      */
     public static function pull_from_hub() {
         $result = TGS_POS_Schema_Manager::pull_and_apply();
 
         // Log result
-        error_log('[TGS POS Sync] Pull: ' . json_encode($result));
+        error_log('[TGS POS Sync] Pull GLOBAL: ' . json_encode($result));
 
         return $result;
     }

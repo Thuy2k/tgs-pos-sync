@@ -14,52 +14,38 @@ class TGS_POS_Pull_Handler {
 
     /**
      * Pull local tables từ Hub (ledger, items, meta)
+     * Dùng pull_schema API giống GLOBAL để thống nhất code
      */
     public static function pull_local_tables() {
         if (!TGS_POS_Config::is_registered()) {
             return array('success' => false, 'message' => 'Not registered with Hub');
         }
 
-        $last_pull = TGS_POS_Config::get('last_pull_local_at');
-        $tables = array('wp_local_ledger', 'wp_local_ledger_item', 'wp_local_ledger_meta');
+        // Lấy watermark lần pull cuối
+        $last_pull = get_option('tgs_pos_last_pull_local_data_at', null);
 
-        $result = TGS_POS_HTTP_Client::pull_local($last_pull, $tables);
+        // Pull từ Hub (dùng pull_schema API giống GLOBAL)
+        $result = TGS_POS_HTTP_Client::pull_schema($last_pull);
 
         if (!$result['success']) {
             return array('success' => false, 'message' => $result['message']);
         }
 
-        $changes = $result['data']['changes'] ?? array();
-        $applied = 0;
+        $schema_data = $result['data'];
+        $local_data = $schema_data['local_data'] ?? array();
 
-        // Track max updated_at from pulled data (same pattern as Pull Global)
-        $max_updated_at = $last_pull;
+        // Upsert LOCAL data vào shop local (dùng logic giống GLOBAL)
+        $upsert_result = TGS_POS_Schema_Manager::upsert_local_data_public($local_data);
 
-        foreach ($changes as $change) {
-            $table = $change['table_name'];
-            $action = $change['action'];
-            $payload = $change['payload'];
-
-            if (self::apply_change($table, $action, $payload)) {
-                $applied++;
-            }
-
-            // Track max updated_at from this change
-            $updated_at = $change['updated_at'] ?? $payload['updated_at'] ?? null;
-            if ($updated_at && $updated_at > $max_updated_at) {
-                $max_updated_at = $updated_at;
-            }
-        }
-
-        // Only update watermark if we got data (same as Pull Global logic)
-        // If pull returns 0 records, keep old watermark
-        if ($max_updated_at && $max_updated_at > $last_pull) {
-            TGS_POS_Config::set('last_pull_local_at', $max_updated_at);
+        // Update watermark với server_time từ Hub
+        $server_time = $schema_data['server_time'] ?? current_time('mysql', true);
+        if (!empty($local_data) && count($local_data) > 1) { // > 1 vì có 'summary' key
+            update_option('tgs_pos_last_pull_local_data_at', $server_time);
         }
 
         return array(
             'success' => true,
-            'pulled' => $applied,
+            'pulled' => $upsert_result['summary']['total_records'] ?? 0,
         );
     }
 
