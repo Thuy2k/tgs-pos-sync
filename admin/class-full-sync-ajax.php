@@ -131,45 +131,25 @@ class TGS_POS_Full_Sync_AJAX {
      */
     private static function upsert_selected_global_data($global_data, $selected_tables) {
         if (empty($selected_tables)) {
-            return array('categories' => 0, 'products' => 0, 'policies' => 0, 'lots' => 0);
+            return array();
         }
 
         // Filter data theo tables được chọn
         $filtered_data = array();
-        $table_mapping = array(
-            'sql_global_product_cat' => 'categories',
-            'sql_global_product_name' => 'products',
-            'sql_global_selling_policy' => 'selling_policies',
-            'sql_global_selling_policy_items' => 'selling_policy_items',
-            'sql_global_purchase_policy' => 'purchase_policies',
-            'sql_global_purchase_policy_item' => 'purchase_policy_items',
-            'sql_global_product_lots' => 'product_lots',
-            'sql_global_supplier' => 'suppliers',
-        );
 
-        foreach ($selected_tables as $table) {
-            $data_key = $table_mapping[$table] ?? null;
-            if ($data_key && isset($global_data[$data_key])) {
-                $filtered_data[$data_key] = $global_data[$data_key];
+        // Copy tất cả data keys (Hub tự động gửi đúng format)
+        foreach ($global_data as $key => $value) {
+            // Skip summary và cursor keys
+            if ($key === 'summary' || strpos($key, 'cursor_') === 0 || strpos($key, 'has_more_') === 0) {
+                $filtered_data[$key] = $value;
+                continue;
+            }
+
+            // Copy data arrays
+            if (is_array($value)) {
+                $filtered_data[$key] = $value;
             }
         }
-
-        // Chỉ copy cursors nếu bảng tương ứng được chọn
-        if (in_array('sql_global_product_cat', $selected_tables)) {
-            $filtered_data['cursor_cat_next'] = $global_data['cursor_cat_next'] ?? PHP_INT_MAX;
-        }
-        if (in_array('sql_global_product_name', $selected_tables)) {
-            $filtered_data['cursor_product_next'] = $global_data['cursor_product_next'] ?? PHP_INT_MAX;
-        }
-        if (in_array('sql_global_selling_policy', $selected_tables) || in_array('sql_global_purchase_policy', $selected_tables)) {
-            $filtered_data['cursor_policy_next'] = $global_data['cursor_policy_next'] ?? PHP_INT_MAX;
-        }
-        if (in_array('sql_global_product_lots', $selected_tables)) {
-            $filtered_data['cursor_lot_next'] = $global_data['cursor_lot_next'] ?? PHP_INT_MAX;
-        }
-
-        // Copy summary (cần thiết cho logic pagination)
-        $filtered_data['summary'] = $global_data['summary'];
 
         return TGS_POS_Schema_Manager::upsert_global_data_direct($filtered_data);
     }

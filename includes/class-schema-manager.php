@@ -331,45 +331,67 @@ class TGS_POS_Schema_Manager {
 
     /**
      * UPSERT dữ liệu GLOBAL trực tiếp (dùng cho Full Sync)
-     * Không có cursor pagination, chỉ insert/update toàn bộ data một lần
+     * Tự động detect table và primary key từ Hub response
      */
     public static function upsert_global_data_direct($global_data) {
-        $summary = array(
-            'categories' => 0,
-            'products' => 0,
-            'policies' => 0,
-            'lots' => 0,
+        global $wpdb;
+
+        $summary = array();
+
+        // Map data key -> table name
+        $table_map = array(
+            'product_cat' => 'wp_global_product_cat',
+            'categories' => 'wp_global_product_cat',
+            'product_name' => 'wp_global_product_name',
+            'products' => 'wp_global_product_name',
+            'product_lots' => 'wp_global_product_lots',
+            'lots' => 'wp_global_product_lots',
+            'selling_policy' => 'wp_global_selling_policy',
+            'selling_policies' => 'wp_global_selling_policy',
+            'selling_policy_items' => 'wp_global_selling_policy_items',
+            'policy_items' => 'wp_global_selling_policy_items',
+            'purchase_policy' => 'wp_global_purchase_policy',
+            'purchase_policies' => 'wp_global_purchase_policy',
+            'purchase_policy_item' => 'wp_global_purchase_policy_item',
+            'purchase_policy_items' => 'wp_global_purchase_policy_item',
+            'supplier' => 'wp_global_supplier',
+            'suppliers' => 'wp_global_supplier',
         );
 
-        // 1. UPSERT categories
-        if (!empty($global_data['categories'])) {
-            foreach ($global_data['categories'] as $cat) {
-                self::upsert_record('wp_global_product_cat', $cat, 'global_product_cat_id');
-                $summary['categories']++;
+        // Loop qua tất cả keys trong global_data
+        foreach ($global_data as $key => $records) {
+            // Skip summary và cursor keys
+            if ($key === 'summary' || strpos($key, 'cursor_') === 0 || strpos($key, 'has_more_') === 0) {
+                continue;
             }
-        }
 
-        // 2. UPSERT products
-        if (!empty($global_data['products'])) {
-            foreach ($global_data['products'] as $product) {
-                self::upsert_record('wp_global_product_name', $product, 'global_product_name_id');
-                $summary['products']++;
+            if (!is_array($records) || empty($records)) {
+                continue;
             }
-        }
 
-        // 3. UPSERT selling policies
-        if (!empty($global_data['selling_policies'])) {
-            foreach ($global_data['selling_policies'] as $policy) {
-                self::upsert_record('wp_global_selling_policy', $policy, 'selling_policy_id');
-                $summary['policies']++;
+            // Get table name từ map
+            $table_name = $table_map[$key] ?? null;
+            if (!$table_name) {
+                error_log("upsert_global_data_direct: Unknown key '{$key}', skipping");
+                continue;
             }
-        }
 
-        // 4. UPSERT product lots
-        if (!empty($global_data['product_lots'])) {
-            foreach ($global_data['product_lots'] as $lot) {
-                self::upsert_record('wp_global_product_lots', $lot, 'global_product_lots_id');
-                $summary['lots']++;
+            // Auto-detect primary key
+            $pk = self::detect_primary_key($table_name);
+            if (!$pk) {
+                error_log("upsert_global_data_direct: No primary key for '{$table_name}', skipping");
+                continue;
+            }
+
+            // Init counter
+            if (!isset($summary[$key])) {
+                $summary[$key] = 0;
+            }
+
+            // Upsert từng record
+            foreach ($records as $record) {
+                self::upsert_record($table_name, $record, $pk);
+                $summary[$key]++;
             }
         }
 

@@ -183,8 +183,27 @@ class TGS_POS_Full_Sync_Page {
                 $('#sync-result').hide();
 
                 var batchCount = 0;
-                var totalRecords = {categories: 0, products: 0, policies: 0, lots: 0, local: 0};
-                var cursors = {categories: 0, products: 0, policies: 0, lots: 0};
+                var totalRecords = {
+                    categories: 0,
+                    products: 0,
+                    policies: 0,
+                    policy_items: 0,
+                    lots: 0,
+                    suppliers: 0,
+                    purchase_policies: 0,
+                    purchase_policy_items: 0,
+                    local: 0
+                };
+                var cursors = {
+                    categories: 0,
+                    products: 0,
+                    policies: 0,
+                    policy_items: 0,
+                    lots: 0,
+                    suppliers: 0,
+                    purchase_policies: 0,
+                    purchase_policy_items: 0
+                };
 
                 // Step 1: Truncate tables
                 updateStatus('Bước 1: Xóa data cũ...');
@@ -235,13 +254,18 @@ class TGS_POS_Full_Sync_Page {
                                 totalRecords.categories += data.batch_summary.categories || 0;
                                 totalRecords.products += data.batch_summary.products || 0;
                                 totalRecords.policies += data.batch_summary.policies || 0;
+                                totalRecords.policy_items += data.batch_summary.policy_items || 0;
                                 totalRecords.lots += data.batch_summary.lots || 0;
+                                totalRecords.suppliers += data.batch_summary.suppliers || 0;
+                                totalRecords.purchase_policies += data.batch_summary.purchase_policies || 0;
+                                totalRecords.purchase_policy_items += data.batch_summary.purchase_policy_items || 0;
                                 totalRecords.local += data.batch_summary.local_records || 0;
 
                                 var statusMsg = '✓ Batch #' + batchCount + ': ' +
                                     'Cat: ' + (data.batch_summary.categories || 0) + ', ' +
                                     'Prod: ' + (data.batch_summary.products || 0) + ', ' +
                                     'Policy: ' + (data.batch_summary.policies || 0) + ', ' +
+                                    'PolicyItems: ' + (data.batch_summary.policy_items || 0) + ', ' +
                                     'Lot: ' + (data.batch_summary.lots || 0);
 
                                 if (data.batch_summary.local_records) {
@@ -285,7 +309,11 @@ class TGS_POS_Full_Sync_Page {
                         '<li>Categories: ' + totalRecords.categories + '</li>' +
                         '<li>Products: ' + totalRecords.products + '</li>' +
                         '<li>Policies: ' + totalRecords.policies + '</li>' +
-                        '<li>Lots: ' + totalRecords.lots + '</li>';
+                        '<li>Policy Items: ' + totalRecords.policy_items + '</li>' +
+                        '<li>Lots: ' + totalRecords.lots + '</li>' +
+                        '<li>Suppliers: ' + totalRecords.suppliers + '</li>' +
+                        '<li>Purchase Policies: ' + totalRecords.purchase_policies + '</li>' +
+                        '<li>Purchase Policy Items: ' + totalRecords.purchase_policy_items + '</li>';
 
                     if (totalRecords.local > 0) {
                         resultHtml += '<li>Local records: ' + totalRecords.local + '</li>';

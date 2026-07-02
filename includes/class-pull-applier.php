@@ -104,20 +104,20 @@ class TGS_POS_Pull_Applier {
 
     /**
      * Get primary key field name for a table
+     * Removed - now using auto-detect from Hub response
      */
     private static function get_primary_key($table_name) {
-        $primary_keys = array(
-            'wp_global_product_name' => 'global_product_name_id',
-            'wp_global_product_cat' => 'global_product_cat_id',
-            'wp_global_product_lots' => 'global_product_lot_id',
-            'wp_global_selling_policy' => 'selling_policy_id',
-            'wp_global_selling_policy_items' => 'sp_item_id',
-            'wp_global_purchase_policy' => 'purchase_policy_id',
-            'wp_global_purchase_policy_item' => 'pp_item_id',
-            'wp_global_supplier' => 'supplier_id',
-        );
+        global $wpdb;
 
-        return $primary_keys[$table_name] ?? 'id';
+        // Auto-detect từ database
+        $keys = $wpdb->get_results("SHOW KEYS FROM {$table_name} WHERE Key_name = 'PRIMARY'", ARRAY_A);
+
+        if (!empty($keys)) {
+            return $keys[0]['Column_name'];
+        }
+
+        // Fallback
+        return 'id';
     }
 
     /**
@@ -130,19 +130,8 @@ class TGS_POS_Pull_Applier {
         $operation = $change['operation'];
         $data = $change['data'];
 
-        // Only apply global tables (products, policies)
-        $allowed_tables = array(
-            'wp_global_product_name',
-            'wp_global_product_cat',
-            'wp_global_product_lots',
-            'wp_global_selling_policy',
-            'wp_global_selling_policy_items',
-            'wp_global_purchase_policy',
-            'wp_global_purchase_policy_item',
-            'wp_global_supplier',
-        );
-
-        if (!in_array($table_name, $allowed_tables)) {
+        // Only apply global tables - simple whitelist check
+        if (strpos($table_name, 'wp_global_') !== 0 && strpos($table_name, 'wp_local_') !== 0) {
             return array('success' => false, 'message' => 'Table not allowed');
         }
 
