@@ -103,6 +103,24 @@ class TGS_POS_Pull_Applier {
     }
 
     /**
+     * Get primary key field name for a table
+     */
+    private static function get_primary_key($table_name) {
+        $primary_keys = array(
+            'wp_global_product_name' => 'global_product_name_id',
+            'wp_global_product_cat' => 'global_product_cat_id',
+            'wp_global_product_lots' => 'global_product_lot_id',
+            'wp_global_selling_policy' => 'selling_policy_id',
+            'wp_global_selling_policy_items' => 'sp_item_id',
+            'wp_global_purchase_policy' => 'purchase_policy_id',
+            'wp_global_purchase_policy_item' => 'pp_item_id',
+            'wp_global_supplier' => 'supplier_id',
+        );
+
+        return $primary_keys[$table_name] ?? 'id';
+    }
+
+    /**
      * Apply change to local database
      */
     private static function apply_change($change) {
@@ -116,7 +134,12 @@ class TGS_POS_Pull_Applier {
         $allowed_tables = array(
             'wp_global_product_name',
             'wp_global_product_cat',
+            'wp_global_product_lots',
             'wp_global_selling_policy',
+            'wp_global_selling_policy_items',
+            'wp_global_purchase_policy',
+            'wp_global_purchase_policy_item',
+            'wp_global_supplier',
         );
 
         if (!in_array($table_name, $allowed_tables)) {
@@ -125,6 +148,9 @@ class TGS_POS_Pull_Applier {
 
         $table = $wpdb->prefix . str_replace('wp_', '', $table_name);
 
+        // Get primary key for this table
+        $primary_key = self::get_primary_key($table_name);
+
         try {
             switch ($operation) {
                 case 'INSERT':
@@ -132,21 +158,21 @@ class TGS_POS_Pull_Applier {
                     break;
 
                 case 'UPDATE':
-                    // Assume data has 'id' field
-                    $id = $data['id'] ?? null;
+                    // Get ID from primary key field
+                    $id = $data[$primary_key] ?? null;
                     if (!$id) {
-                        return array('success' => false, 'message' => 'Missing ID for UPDATE');
+                        return array('success' => false, 'message' => "Missing {$primary_key} for UPDATE");
                     }
-                    unset($data['id']);
-                    $result = $wpdb->update($table, $data, array('id' => $id));
+                    unset($data[$primary_key]);
+                    $result = $wpdb->update($table, $data, array($primary_key => $id));
                     break;
 
                 case 'DELETE':
-                    $id = $data['id'] ?? null;
+                    $id = $data[$primary_key] ?? null;
                     if (!$id) {
-                        return array('success' => false, 'message' => 'Missing ID for DELETE');
+                        return array('success' => false, 'message' => "Missing {$primary_key} for DELETE");
                     }
-                    $result = $wpdb->delete($table, array('id' => $id));
+                    $result = $wpdb->delete($table, array($primary_key => $id));
                     break;
 
                 default:

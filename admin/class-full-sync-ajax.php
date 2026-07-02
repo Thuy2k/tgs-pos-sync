@@ -140,8 +140,11 @@ class TGS_POS_Full_Sync_AJAX {
             'sql_global_product_cat' => 'categories',
             'sql_global_product_name' => 'products',
             'sql_global_selling_policy' => 'selling_policies',
+            'sql_global_selling_policy_items' => 'selling_policy_items',
             'sql_global_purchase_policy' => 'purchase_policies',
+            'sql_global_purchase_policy_item' => 'purchase_policy_items',
             'sql_global_product_lots' => 'product_lots',
+            'sql_global_supplier' => 'suppliers',
         );
 
         foreach ($selected_tables as $table) {
