@@ -173,7 +173,7 @@ class TGS_POS_Schema_Manager {
         // 3. UPSERT selling policies
         if (!empty($global_data['selling_policies'])) {
             foreach ($global_data['selling_policies'] as $policy) {
-                $result = self::upsert_record('wp_global_selling_policy', $policy, 'global_selling_policy_id');
+                $result = self::upsert_record('wp_global_selling_policy', $policy, 'selling_policy_id');
                 $summary['policies'][$result]++;
             }
         }
@@ -360,7 +360,7 @@ class TGS_POS_Schema_Manager {
         // 3. UPSERT selling policies
         if (!empty($global_data['selling_policies'])) {
             foreach ($global_data['selling_policies'] as $policy) {
-                self::upsert_record('wp_global_selling_policy', $policy, 'global_selling_policy_id');
+                self::upsert_record('wp_global_selling_policy', $policy, 'selling_policy_id');
                 $summary['policies']++;
             }
         }
