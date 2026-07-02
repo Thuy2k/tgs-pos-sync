@@ -116,34 +116,21 @@ class TGS_POS_Schema_Manager {
             }
         }
 
-        // 8. Update watermark với max(updated_at) từ data vừa pull
-        // Tìm updated_at lớn nhất từ tất cả records
-        $max_updated_at = $last_pull; // fallback = watermark cũ
+        // 8. Update watermark với server_time từ Hub (đơn giản hơn)
+        $server_time = $schema_data['server_time'] ?? current_time('mysql', true);
 
-        foreach ($schema_data['global_data']['categories'] ?? [] as $item) {
-            if (!empty($item['updated_at']) && $item['updated_at'] > $max_updated_at) {
-                $max_updated_at = $item['updated_at'];
-            }
-        }
-        foreach ($schema_data['global_data']['products'] ?? [] as $item) {
-            if (!empty($item['updated_at']) && $item['updated_at'] > $max_updated_at) {
-                $max_updated_at = $item['updated_at'];
-            }
-        }
-        foreach ($schema_data['global_data']['selling_policies'] ?? [] as $item) {
-            if (!empty($item['updated_at']) && $item['updated_at'] > $max_updated_at) {
-                $max_updated_at = $item['updated_at'];
-            }
-        }
-        foreach ($schema_data['global_data']['product_lots'] ?? [] as $item) {
-            if (!empty($item['updated_at']) && $item['updated_at'] > $max_updated_at) {
-                $max_updated_at = $item['updated_at'];
+        // Chỉ update nếu có data mới
+        $has_data = false;
+        foreach ($schema_data['global_data'] as $key => $value) {
+            if ($key !== 'summary' && strpos($key, 'cursor_') !== 0 && strpos($key, 'has_more_') !== 0 && !empty($value)) {
+                $has_data = true;
+                break;
             }
         }
 
-        // Nếu không có data nào (pull về trống), giữ nguyên watermark cũ
-        if ($max_updated_at && $max_updated_at > $last_pull) {
-            update_option('tgs_pos_last_pull_global_data_at', $max_updated_at);
+        if ($has_data) {
+            update_option('tgs_pos_last_pull_global_data_at', $server_time);
+            error_log('[Shop] Watermark updated: ' . ($last_pull ?: 'null') . ' -> ' . $server_time);
         }
 
         return array(
@@ -158,7 +145,7 @@ class TGS_POS_Schema_Manager {
                 'batch_count' => $batch_count,
                 'is_incremental' => !empty($last_pull),
                 'last_pull' => $last_pull,
-                'new_watermark' => $max_updated_at,
+                'new_watermark' => get_option('tgs_pos_last_pull_global_data_at'),
             ),
         );
     }

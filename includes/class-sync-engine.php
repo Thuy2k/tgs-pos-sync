@@ -13,23 +13,34 @@ if (!defined('ABSPATH')) {
 class TGS_POS_Sync_Engine {
 
     /**
-     * Push to Hub + Pull LOCAL (triggered by cron or manual)
-     * Push local ledger → Delete synced → Pull LOCAL từ Hub
+     * Push events to Hub and sync LOCAL data back
+     * Push events → Hub accepts → Delete local → Pull LOCAL from Hub
+     * (triggered by cron or manual button "Đẩy lên & Kéo về LOCAL")
      */
-    public static function push_to_hub() {
-        $result = self::full_sync();
+    public static function push_and_sync_local() {
+        // Push events to Hub
+        $push_result = TGS_POS_Push_Collector::push();
+
+        // Pull local ledger data back from Hub (not schema)
+        $pull_result = TGS_POS_Pull_Handler::pull_local_tables();
 
         // Log result
-        error_log('[TGS POS Sync] Push + Pull LOCAL: ' . json_encode($result));
+        error_log('[TGS POS Sync] Push + Pull LOCAL: ' . json_encode(array(
+            'push' => $push_result,
+            'pull' => $pull_result,
+        )));
 
-        return $result;
+        return array(
+            'push' => $push_result,
+            'pull' => $pull_result,
+        );
     }
 
     /**
-     * Pull GLOBAL from Hub (triggered by cron or manual)
-     * Pull GLOBAL data: categories, products, policies, lots
+     * Pull GLOBAL data from Hub (categories, products, policies, lots)
+     * (triggered by cron or manual button "Pull từ Hub GLOBAL")
      */
-    public static function pull_from_hub() {
+    public static function pull_global_data() {
         $result = TGS_POS_Schema_Manager::pull_and_apply();
 
         // Log result
@@ -39,23 +50,28 @@ class TGS_POS_Sync_Engine {
     }
 
     /**
-     * Full sync (push + pull)
-     * Push local ledger to Hub, then pull back from Hub
+     * DEPRECATED: Use push_and_sync_local() instead
      */
-    public static function full_sync() {
-        $push_result = self::push_to_hub();
-
-        // Pull local ledger data back from Hub (not schema)
-        $pull_result = TGS_POS_Pull_Handler::pull_local_tables();
-
-        return array(
-            'push' => $push_result,
-            'pull' => $pull_result,
-        );
+    public static function push_to_hub() {
+        return self::push_and_sync_local();
     }
 
     /**
-     * Manual trigger push (AJAX)
+     * DEPRECATED: Use pull_global_data() instead
+     */
+    public static function pull_from_hub() {
+        return self::pull_global_data();
+    }
+
+    /**
+     * DEPRECATED: Use push_and_sync_local() instead
+     */
+    public static function full_sync() {
+        return self::push_and_sync_local();
+    }
+
+    /**
+     * Manual trigger push + sync LOCAL (AJAX)
      */
     public static function ajax_manual_push() {
         check_ajax_referer('tgs_pos_manual_sync', 'nonce');
@@ -64,17 +80,17 @@ class TGS_POS_Sync_Engine {
             wp_send_json_error('Permission denied');
         }
 
-        $result = self::push_to_hub();
+        $result = self::push_and_sync_local();
 
-        if ($result['success']) {
+        if ($result['push']['success']) {
             wp_send_json_success($result);
         } else {
-            wp_send_json_error($result['message']);
+            wp_send_json_error($result['push']['message']);
         }
     }
 
     /**
-     * Manual trigger pull (AJAX)
+     * Manual trigger pull GLOBAL (AJAX)
      */
     public static function ajax_manual_pull() {
         check_ajax_referer('tgs_pos_manual_sync', 'nonce');
@@ -83,7 +99,7 @@ class TGS_POS_Sync_Engine {
             wp_send_json_error('Permission denied');
         }
 
-        $result = self::pull_from_hub();
+        $result = self::pull_global_data();
 
         if ($result['success']) {
             wp_send_json_success($result);
@@ -102,7 +118,7 @@ class TGS_POS_Sync_Engine {
             wp_send_json_error('Permission denied');
         }
 
-        $result = self::full_sync();
+        $result = self::push_and_sync_local();
 
         wp_send_json_success($result);
     }

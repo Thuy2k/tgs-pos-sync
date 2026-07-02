@@ -94,8 +94,8 @@ class TGS_POS_Sync {
         }
 
         // Sync triggers
-        add_action('tgs_pos_sync_push', array('TGS_POS_Sync_Engine', 'push_to_hub'));
-        add_action('tgs_pos_sync_pull', array('TGS_POS_Sync_Engine', 'pull_from_hub'));
+        add_action('tgs_pos_sync_push', array('TGS_POS_Sync_Engine', 'push_and_sync_local'));
+        add_action('tgs_pos_sync_pull', array('TGS_POS_Sync_Engine', 'pull_global_data'));
 
         // Cron schedule
         if (!wp_next_scheduled('tgs_pos_sync_push')) {
